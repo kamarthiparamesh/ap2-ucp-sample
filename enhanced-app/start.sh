@@ -18,25 +18,33 @@ NC='\033[0m' # No Color
 mkdir -p logs
 mkdir -p pids
 
-# Check if Ollama is running
-echo -e "${BLUE}Checking Ollama connection...${NC}"
-if curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
-    echo -e "${GREEN}✓ Ollama is running${NC}"
-else
-    echo -e "${YELLOW}⚠ Warning: Ollama is not running on localhost:11434${NC}"
-    echo -e "${YELLOW}  Please start Ollama and ensure qwen2.5:latest or gemma2:latest is installed${NC}"
-    echo -e "${YELLOW}  Run: ollama pull qwen2.5:latest${NC}"
-fi
-
-echo ""
-
-# Load environment variables
+# Load environment variables first
 if [ -f ".env" ]; then
     echo -e "${BLUE}Loading environment variables...${NC}"
     export $(cat .env | grep -v '^#' | xargs)
     echo -e "${GREEN}✓ Environment variables loaded${NC}"
 else
     echo -e "${YELLOW}⚠ Warning: .env file not found${NC}"
+fi
+
+echo ""
+
+# Set defaults if not in environment
+OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434}
+OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:latest}
+
+# Extract host from OLLAMA_URL (remove http:// and port)
+OLLAMA_HOST=$(echo $OLLAMA_URL | sed 's|http://||' | sed 's|:[0-9]*$||')
+OLLAMA_PORT=$(echo $OLLAMA_URL | grep -oP ':\K[0-9]+$' || echo "11434")
+
+# Check if Ollama is running
+echo -e "${BLUE}Checking Ollama connection at ${OLLAMA_URL}...${NC}"
+if curl -s ${OLLAMA_URL}/api/version > /dev/null 2>&1; then
+    echo -e "${GREEN}✓ Ollama is running${NC}"
+else
+    echo -e "${YELLOW}⚠ Warning: Ollama is not running at ${OLLAMA_URL}${NC}"
+    echo -e "${YELLOW}  Please start Ollama and ensure ${OLLAMA_MODEL} is installed${NC}"
+    echo -e "${YELLOW}  Run: ollama pull ${OLLAMA_MODEL}${NC}"
 fi
 
 echo ""
