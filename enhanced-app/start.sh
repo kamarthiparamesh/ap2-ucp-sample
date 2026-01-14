@@ -79,7 +79,7 @@ echo "Installing Python dependencies..."
 pip install -q -r requirements.txt
 
 # Start backend in background
-echo -e "${GREEN}✓ Starting backend on port 8451${NC}"
+echo -e "${GREEN}✓ Starting backend on port 8452${NC}"
 python main.py > ../logs/backend.log 2>&1 &
 BACKEND_PID=$!
 echo $BACKEND_PID > ../pids/backend.pid
@@ -93,13 +93,13 @@ sleep 3
 # Check if npm is installed
 if ! command -v npm &> /dev/null; then
     echo -e "${YELLOW}⚠ Error: npm is not installed${NC}"
-    echo -e "${YELLOW}  The backend is running on port 8451${NC}"
+    echo -e "${YELLOW}  The backend is running on port 8452${NC}"
     echo -e "${YELLOW}  To start the frontends, please install Node.js and npm first:${NC}"
     echo -e "${YELLOW}    - Visit: https://nodejs.org/${NC}"
     echo -e "${YELLOW}    - Or use: apt-get install nodejs npm (Debian/Ubuntu)${NC}"
     echo ""
     echo -e "${GREEN}Backend is running at:${NC}"
-    echo -e "📚 ${BLUE}API Documentation:${NC}   http://localhost:8451/docs"
+    echo -e "📚 ${BLUE}API Documentation:${NC}   http://localhost:8452/docs"
     echo ""
     echo -e "${YELLOW}Press Ctrl+C to stop the backend${NC}"
     wait
@@ -150,7 +150,7 @@ echo -e "${GREEN}========================================${NC}"
 echo ""
 echo -e "📱 ${BLUE}Chat Interface:${NC}      http://localhost:8450"
 echo -e "🏪 ${BLUE}Merchant Portal:${NC}     http://localhost:8451"
-echo -e "📚 ${BLUE}API Documentation:${NC}   http://localhost:8451/docs"
+echo -e "📚 ${BLUE}API Documentation:${NC}   http://localhost:8452/docs"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
 echo ""

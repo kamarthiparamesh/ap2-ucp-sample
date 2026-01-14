@@ -20,8 +20,20 @@ if [ -f "pids/merchant.pid" ]; then
     rm pids/merchant.pid
 fi
 
-# Also kill by port (backup method)
-lsof -ti:8450 | xargs kill -9 2>/dev/null || true
-lsof -ti:8451 | xargs kill -9 2>/dev/null || true
+# Kill all processes on the specified ports (more reliable method)
+# Kill backend on port 8452
+pkill -f "python.*main\.py" 2>/dev/null || true
+fuser -k 8452/tcp 2>/dev/null || true
+
+# Kill chat interface on port 8450
+pkill -f "vite.*8450" 2>/dev/null || true
+fuser -k 8450/tcp 2>/dev/null || true
+
+# Kill merchant portal on port 8451
+pkill -f "vite.*8451" 2>/dev/null || true
+fuser -k 8451/tcp 2>/dev/null || true
+
+# Cleanup PID files
+rm -f pids/*.pid 2>/dev/null || true
 
 echo "✓ All services stopped"
