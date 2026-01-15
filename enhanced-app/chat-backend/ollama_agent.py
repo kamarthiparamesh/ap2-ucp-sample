@@ -33,19 +33,14 @@ class EnhancedBusinessAgent:
 You can help customers:
 - Search for products in our catalog
 - Answer questions about products
+- Add items to their shopping cart
 - View their shopping cart
 - Help them find what they need
 
-CRITICAL RULES YOU MUST FOLLOW:
-1. You CANNOT add items to the cart - you do not have that capability
-2. When users ask to "add" something, say: "I cannot add items directly. The cart feature is not yet implemented in this chat interface."
-3. NEVER say "I've added X to your cart" - this is a LIE
-4. NEVER pretend items are in the cart when they're not
-5. When showing the cart, I will provide you with ACTUAL cart contents
-6. If no cart data is provided in the context, the cart is EMPTY
-7. Be honest about your limitations
+When showing the cart, I will provide you with the ACTUAL cart contents.
+When a user asks to add something, I will handle the cart operation and provide you with the result.
 
-Be friendly and helpful, but always tell the truth.
+Be friendly, helpful, and enthusiastic about helping customers shop!
 When customers ask about products, I will provide you with the product information from our catalog.
 """
 
@@ -75,6 +70,65 @@ When customers ask about products, I will provide you with the product informati
             logger.error(f"Failed to search products: {e}")
             return []
 
+    def add_to_cart(self, session_id: str, product_id: str, name: str, price: float,
+                    sku: str, quantity: int = 1) -> Dict[str, Any]:
+        """
+        Add a product to the user's cart.
+
+        Args:
+            session_id: User session identifier
+            product_id: Product ID
+            name: Product name
+            price: Product price in dollars
+            sku: Product SKU
+            quantity: Quantity to add
+
+        Returns:
+            Updated cart info
+        """
+        if session_id not in self.carts:
+            self.carts[session_id] = []
+
+        cart = self.carts[session_id]
+
+        # Check if product already in cart
+        existing_item = next((item for item in cart if item['product_id'] == product_id), None)
+
+        if existing_item:
+            existing_item['quantity'] += quantity
+        else:
+            cart.append({
+                'product_id': product_id,
+                'sku': sku,
+                'name': name,
+                'price': price,
+                'quantity': quantity
+            })
+
+        total = sum(item['price'] * item['quantity'] for item in cart)
+
+        return {
+            'cart': cart,
+            'total': total,
+            'item_count': sum(item['quantity'] for item in cart)
+        }
+
+    def get_cart(self, session_id: str) -> Dict[str, Any]:
+        """Get the current cart for a session."""
+        cart = self.carts.get(session_id, [])
+        total = sum(item['price'] * item['quantity'] for item in cart)
+
+        return {
+            'cart': cart,
+            'total': total,
+            'item_count': sum(item['quantity'] for item in cart)
+        }
+
+    def clear_cart(self, session_id: str):
+        """Clear the cart for a session."""
+        if session_id in self.carts:
+            del self.carts[session_id]
+
     async def process_message(
         self,
         message: str,
@@ -93,15 +147,55 @@ When customers ask about products, I will provide you with the product informati
             Response dict with output and metadata
         """
         try:
+            # Check if user is trying to add to cart
+            add_keywords = ['add', 'put', 'place']
+            is_add_to_cart = any(keyword in message.lower() for keyword in add_keywords) and \
+                            ('cart' in message.lower() or 'basket' in message.lower() or
+                             any(prod in message.lower() for prod in ['cookie', 'chip', 'strawberr', 'bar']))
+
             # Check if user is asking about cart
             cart_keywords = ['cart', 'basket', 'my order', 'what did i add', 'show me what']
-            is_cart_query = any(keyword in message.lower() for keyword in cart_keywords)
+            is_cart_query = any(keyword in message.lower() for keyword in cart_keywords) and not is_add_to_cart
 
             # Check if user is asking about products
             search_keywords = ['product', 'cookie', 'chip', 'strawberr', 'show', 'what', 'find', 'looking for', 'search']
-            should_search = any(keyword in message.lower() for keyword in search_keywords) and not is_cart_query
+            should_search = any(keyword in message.lower() for keyword in search_keywords) and not is_cart_query and not is_add_to_cart
 
             context = ""
+            cart_action_result = None
+
+            # Handle add to cart
+            if is_add_to_cart:
+                # Try to extract product name from message
+                products = await self.search_products(limit=50)  # Get all products
+
+                # Find matching product
+                matched_product = None
+                msg_lower = message.lower()
+
+                for product in products:
+                    product_name_lower = product['name'].lower()
+                    # Check for exact or partial match
+                    if product_name_lower in msg_lower or \
+                       any(word in msg_lower for word in product_name_lower.split()):
+                        matched_product = product
+                        break
+
+                if matched_product:
+                    # Add to cart
+                    cart_info = self.add_to_cart(
+                        session_id=session_id,
+                        product_id=matched_product['id'],
+                        name=matched_product['name'],
+                        price=matched_product['price'],
+                        sku=matched_product.get('sku', matched_product['id']),
+                        quantity=1
+                    )
+
+                    cart_action_result = f"\n\n✅ SUCCESS: I have added {matched_product['name']} (${matched_product['price']:.2f}) to your cart!\n"
+                    cart_action_result += f"Cart now has {cart_info['item_count']} item(s), Total: ${cart_info['total']:.2f}\n"
+                else:
+                    cart_action_result = "\n\n❌ I couldn't find that product. Please specify the exact product name from our catalog.\n"
 
             # Add cart context if asking about cart
             if is_cart_query:
@@ -139,6 +233,12 @@ When customers ask about products, I will provide you with the product informati
                 messages.extend(chat_history)
 
             user_message = message
+
+            # Add cart action result if any
+            if cart_action_result:
+                user_message += cart_action_result
+
+            # Add other context
             if context:
                 user_message += context
 

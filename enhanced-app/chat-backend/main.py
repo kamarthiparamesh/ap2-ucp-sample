@@ -241,6 +241,48 @@ async def get_order(
 
 
 # ============================================================================
+# Cart Endpoints
+# ============================================================================
+
+@app.get("/api/cart/{session_id}")
+async def get_cart(
+    session_id: str,
+    agent: EnhancedBusinessAgent = Depends(get_agent)
+):
+    """Get cart for a session."""
+    cart_info = agent.get_cart(session_id)
+    return cart_info
+
+
+@app.post("/api/cart/{session_id}/add")
+async def add_to_cart(
+    session_id: str,
+    item: CartItem,
+    agent: EnhancedBusinessAgent = Depends(get_agent)
+):
+    """Add item to cart."""
+    cart_info = agent.add_to_cart(
+        session_id=session_id,
+        product_id=item.product_id,
+        name=item.name,
+        price=item.price,
+        sku=item.sku,
+        quantity=item.quantity
+    )
+    return cart_info
+
+
+@app.delete("/api/cart/{session_id}")
+async def clear_cart(
+    session_id: str,
+    agent: EnhancedBusinessAgent = Depends(get_agent)
+):
+    """Clear cart for a session."""
+    agent.clear_cart(session_id)
+    return {"message": "Cart cleared successfully"}
+
+
+# ============================================================================
 # Health Check
 # ============================================================================
 
