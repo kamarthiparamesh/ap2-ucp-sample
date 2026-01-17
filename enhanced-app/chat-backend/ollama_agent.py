@@ -43,9 +43,16 @@ IMPORTANT INSTRUCTIONS:
 3. If you see a "✅ SUCCESS" message in the conversation, acknowledge that the item was added to the cart.
 4. If you see a "❌" message, inform the user that the product wasn't found.
 5. When users ask to see their cart with phrases like "show my cart" or "what's in my cart", I will provide the complete cart contents.
+6. IMPORTANT: When I provide product information with image URLs, you MUST include the images in your response using markdown image syntax: ![Product Name](image_url)
+   - Place the image on its own line before the product name
+   - Example format:
+     ![Chocochip Cookies](https://images.unsplash.com/photo-xxx)
+     **Chocochip Cookies** - $4.99
+     Description here
 
 Be friendly, helpful, and enthusiastic about helping customers shop!
-When customers ask about products, I will provide you with the product information from our catalog.
+When customers ask about products, I will provide you with the product information and image URLs from our catalog.
+Always include product images when available.
 Always be clear when items are successfully added to the cart.
 """
 
@@ -271,9 +278,12 @@ Always be clear when items are successfully added to the cart.
 
                 products = await self.search_products(query=search_query)
                 if products:
-                    context += "\n\nAvailable products:\n"
+                    context += "\n\nAvailable products (include images in your response using markdown format):\n"
                     for p in products:
+                        img_url = p.get('image_url', '')
                         context += f"- {p['name']} (${p['price']:.2f}) - {p.get('description', 'No description')}\n"
+                        if img_url:
+                            context += f"  Image: {img_url}\n"
 
             # Build conversation messages
             messages = [SystemMessage(content=self.system_prompt)]
