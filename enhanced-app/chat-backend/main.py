@@ -575,6 +575,7 @@ class PrepareCheckoutResponse(BaseModel):
     mandate_id: str
     mandate_data: Dict[str, Any]
     cart_total: float
+    cart_items: List[Dict[str, Any]]
     default_card: Dict[str, Any]
 
 
@@ -613,7 +614,7 @@ async def prepare_checkout(
     """
     # Get cart from session
     cart_info = agent.get_cart(request.session_id)
-    if not cart_info or not cart_info.get("items"):
+    if not cart_info or not cart_info.get("cart") or cart_info["item_count"] == 0:
         raise HTTPException(status_code=400, detail="Cart is empty")
 
     # Get user's default card
@@ -655,10 +656,24 @@ async def prepare_checkout(
 
     logger.info(f"Prepared checkout for {request.user_email}: mandate {mandate_id}")
 
+    # Transform cart items to match frontend format
+    cart_items = [
+        {
+            "id": item["product_id"],
+            "sku": item.get("sku", item["product_id"]),
+            "title": item["name"],
+            "price": item["price"],
+            "quantity": item["quantity"],
+            "image_url": item.get("image_url")
+        }
+        for item in cart_info["cart"]
+    ]
+
     return PrepareCheckoutResponse(
         mandate_id=mandate_id,
         mandate_data=mandate,
         cart_total=cart_info["total"],
+        cart_items=cart_items,
         default_card=card.to_dict(masked=True)
     )
 

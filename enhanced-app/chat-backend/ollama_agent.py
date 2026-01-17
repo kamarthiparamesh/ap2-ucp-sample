@@ -37,11 +37,16 @@ You can help customers:
 - View their shopping cart
 - Help them find what they need
 
-When showing the cart, I will provide you with the ACTUAL cart contents.
-When a user asks to add something, I will handle the cart operation and provide you with the result.
+IMPORTANT INSTRUCTIONS:
+1. When showing the cart, I will provide you with the ACTUAL cart contents - use that information.
+2. When a user expresses intent to purchase/get/buy a product, I will automatically add it to their cart and show you a SUCCESS or FAILURE message.
+3. If you see a "✅ SUCCESS" message in the conversation, acknowledge that the item was added to the cart.
+4. If you see a "❌" message, inform the user that the product wasn't found.
+5. When users ask to see their cart with phrases like "show my cart" or "what's in my cart", I will provide the complete cart contents.
 
 Be friendly, helpful, and enthusiastic about helping customers shop!
 When customers ask about products, I will provide you with the product information from our catalog.
+Always be clear when items are successfully added to the cart.
 """
 
     async def initialize(self):
@@ -71,7 +76,7 @@ When customers ask about products, I will provide you with the product informati
             return []
 
     def add_to_cart(self, session_id: str, product_id: str, name: str, price: float,
-                    sku: str, quantity: int = 1) -> Dict[str, Any]:
+                    sku: str, quantity: int = 1, image_url: str = None) -> Dict[str, Any]:
         """
         Add a product to the user's cart.
 
@@ -82,6 +87,7 @@ When customers ask about products, I will provide you with the product informati
             price: Product price in dollars
             sku: Product SKU
             quantity: Quantity to add
+            image_url: Product image URL (optional)
 
         Returns:
             Updated cart info
@@ -97,13 +103,16 @@ When customers ask about products, I will provide you with the product informati
         if existing_item:
             existing_item['quantity'] += quantity
         else:
-            cart.append({
+            cart_item = {
                 'product_id': product_id,
                 'sku': sku,
                 'name': name,
                 'price': price,
                 'quantity': quantity
-            })
+            }
+            if image_url:
+                cart_item['image_url'] = image_url
+            cart.append(cart_item)
 
         total = sum(item['price'] * item['quantity'] for item in cart)
 
@@ -148,10 +157,29 @@ When customers ask about products, I will provide you with the product informati
         """
         try:
             # Check if user is trying to add to cart
-            add_keywords = ['add', 'put', 'place']
-            is_add_to_cart = any(keyword in message.lower() for keyword in add_keywords) and \
-                            ('cart' in message.lower() or 'basket' in message.lower() or
-                             any(prod in message.lower() for prod in ['cookie', 'chip', 'strawberr', 'bar']))
+            msg_lower = message.lower()
+
+            # Direct add keywords
+            add_keywords = ['add', 'put', 'place', 'get', 'buy', 'purchase', 'order', 'want']
+            has_add_keyword = any(keyword in msg_lower for keyword in add_keywords)
+
+            # Product mentions
+            product_keywords = ['cookie', 'chip', 'strawberr', 'bar', 'potato', 'oat', 'nutri']
+            has_product_mention = any(keyword in msg_lower for keyword in product_keywords)
+
+            # Cart/purchase context
+            cart_context = ['cart', 'basket']
+            has_cart_context = any(keyword in msg_lower for keyword in cart_context)
+
+            # Check for affirmative responses that might be confirming an add-to-cart action
+            is_affirmative = msg_lower.strip() in ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'yup']
+
+            # Determine if this is an add-to-cart intent
+            is_add_to_cart = (
+                (has_add_keyword and (has_product_mention or has_cart_context)) or
+                (is_affirmative and has_product_mention) or
+                (has_add_keyword and has_product_mention)
+            )
 
             # Check if user is asking about cart
             cart_keywords = ['cart', 'basket', 'my order', 'what did i add', 'show me what']
@@ -206,7 +234,8 @@ When customers ask about products, I will provide you with the product informati
                         name=matched_product['name'],
                         price=matched_product['price'],
                         sku=matched_product.get('sku', matched_product['id']),
-                        quantity=1
+                        quantity=1,
+                        image_url=matched_product.get('image_url')
                     )
                     logger.info(f"Cart updated: {cart_info['item_count']} items, Total: ${cart_info['total']:.2f}")
                     logger.info(f"Current cart contents: {[item['name'] for item in cart_info['cart']]}")

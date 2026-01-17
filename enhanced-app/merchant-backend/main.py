@@ -134,7 +134,7 @@ async def seed_initial_products():
                     price=4.99,
                     category="Bakery/Cookies",
                     brand="HomeBaked",
-                    image_url=json.dumps(["https://example.com/cookies.jpg"]),
+                    image_url=json.dumps(["https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=400&h=400&fit=crop&q=80"]),
                 ),
                 Product(
                     id="PROD-002",
@@ -144,7 +144,7 @@ async def seed_initial_products():
                     price=4.49,
                     category="Produce/Fruits",
                     brand="FarmFresh",
-                    image_url=json.dumps(["https://example.com/strawberries.jpg"]),
+                    image_url=json.dumps(["https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=400&h=400&fit=crop&q=80"]),
                 ),
                 Product(
                     id="PROD-003",
@@ -154,7 +154,7 @@ async def seed_initial_products():
                     price=3.79,
                     category="Snacks/Chips",
                     brand="CrunchTime",
-                    image_url=json.dumps(["https://example.com/chips.jpg"]),
+                    image_url=json.dumps(["https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400&h=400&fit=crop&q=80"]),
                 ),
                 Product(
                     id="PROD-004",
@@ -164,7 +164,7 @@ async def seed_initial_products():
                     price=4.79,
                     category="Snacks/Chips",
                     brand="HealthyChoice",
-                    image_url=json.dumps(["https://example.com/sweet-chips.jpg"]),
+                    image_url=json.dumps(["https://images.unsplash.com/photo-1626200655629-cbee9dc8f42e?w=400&h=400&fit=crop&q=80"]),
                 ),
                 Product(
                     id="PROD-005",
@@ -174,7 +174,7 @@ async def seed_initial_products():
                     price=5.99,
                     category="Bakery/Cookies",
                     brand="HomeBaked",
-                    image_url=json.dumps(["https://example.com/oat-cookies.jpg"]),
+                    image_url=json.dumps(["https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=400&h=400&fit=crop&q=80"]),
                 ),
                 Product(
                     id="PROD-006",
@@ -184,7 +184,7 @@ async def seed_initial_products():
                     price=2.99,
                     category="Snacks/Bars",
                     brand="EnergyPlus",
-                    image_url=json.dumps(["https://example.com/nutribar.jpg"]),
+                    image_url=json.dumps(["https://images.unsplash.com/photo-1604480133435-25b9560f4294?w=400&h=400&fit=crop&q=80"]),
                 ),
             ]
 

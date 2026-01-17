@@ -11,9 +11,11 @@ interface CheckoutPopupProps {
 
 interface CartItem {
   id: string
+  sku: string
   title: string
   price: number
   quantity: number
+  image_url?: string
 }
 
 interface PaymentCard {
@@ -317,14 +319,26 @@ function CheckoutPopup({ isOpen, onClose, sessionId, userEmail }: CheckoutPopupP
               {/* Cart Items */}
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-3">Order Summary</h3>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {checkoutData?.cart_items.map((item) => (
-                    <div key={item.id} className="flex justify-between items-center py-2">
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-800">{item.title}</p>
+                    <div key={item.id} className="flex items-center space-x-3 py-2">
+                      {item.image_url && (
+                        <img
+                          src={item.image_url}
+                          alt={item.title}
+                          className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                          onError={(e) => {
+                            // Hide image if it fails to load
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{item.title}</p>
+                        <p className="text-xs text-gray-500">SKU: {item.sku} • ID: {item.id}</p>
                         <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                       </div>
-                      <p className="text-sm font-medium text-gray-800">
+                      <p className="text-sm font-medium text-gray-800 whitespace-nowrap">
                         ${(item.price * item.quantity).toFixed(2)}
                       </p>
                     </div>
