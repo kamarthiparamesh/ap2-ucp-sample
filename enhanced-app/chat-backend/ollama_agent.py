@@ -188,13 +188,17 @@ Always be clear when items are successfully added to the cart.
                 (has_add_keyword and has_product_mention)
             )
 
+            # Check if user wants to checkout
+            checkout_keywords = ['checkout', 'check out', 'pay', 'payment', 'complete order', 'finalize', 'proceed']
+            is_checkout_intent = any(keyword in message.lower() for keyword in checkout_keywords)
+
             # Check if user is asking about cart
             cart_keywords = ['cart', 'basket', 'my order', 'what did i add', 'show me what']
-            is_cart_query = any(keyword in message.lower() for keyword in cart_keywords) and not is_add_to_cart
+            is_cart_query = any(keyword in message.lower() for keyword in cart_keywords) and not is_add_to_cart and not is_checkout_intent
 
             # Check if user is asking about products
             search_keywords = ['product', 'cookie', 'chip', 'strawberr', 'show', 'what', 'find', 'looking for', 'search']
-            should_search = any(keyword in message.lower() for keyword in search_keywords) and not is_cart_query and not is_add_to_cart
+            should_search = any(keyword in message.lower() for keyword in search_keywords) and not is_cart_query and not is_add_to_cart and not is_checkout_intent
 
             context = ""
             cart_action_result = None
@@ -253,8 +257,8 @@ Always be clear when items are successfully added to the cart.
                     logger.warning(f"Product not found for message: {message}")
                     cart_action_result = "\n\n❌ I couldn't find that product. Please specify the exact product name from our catalog.\n"
 
-            # Add cart context if asking about cart
-            if is_cart_query:
+            # Add cart context if asking about cart OR checkout
+            if is_cart_query or is_checkout_intent:
                 cart_items = self.carts.get(session_id, [])
                 if cart_items:
                     context += "\n\nCURRENT CART CONTENTS (show this to the user):\n"
@@ -264,8 +268,13 @@ Always be clear when items are successfully added to the cart.
                         total += item_total
                         context += f"- {item['name']} x{item['quantity']} @ ${item['price']:.2f} each = ${item_total:.2f}\n"
                     context += f"\nCart Total: ${total:.2f}\n"
+
+                    if is_checkout_intent:
+                        context += "\nThe user wants to proceed to checkout. Confirm the cart contents and let them know the checkout popup will open.\n"
                 else:
                     context += "\n\nThe user's cart is currently EMPTY.\n"
+                    if is_checkout_intent:
+                        context += "Tell them they need to add items before checkout.\n"
 
             # Add product search context
             if should_search:
