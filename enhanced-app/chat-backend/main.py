@@ -236,6 +236,26 @@ async def root():
     }
 
 
+@app.get("/api/products")
+async def get_products(
+    query: str = None,
+    limit: int = 20,
+    agent: EnhancedBusinessAgent = Depends(get_agent)
+):
+    """
+    Get products via UCP from merchant backend.
+    Frontend should use this endpoint instead of calling merchant directly.
+    """
+    products = await agent.search_products(query=query, limit=limit)
+
+    # Transform to include SKU (use product ID as SKU if not available)
+    for product in products:
+        if 'sku' not in product:
+            product['sku'] = product['id']
+
+    return {"products": products}
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(
     message: ChatMessage,

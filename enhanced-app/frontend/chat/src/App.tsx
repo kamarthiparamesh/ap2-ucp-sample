@@ -1,15 +1,25 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
-import { Send, ShoppingCart, Sparkles, Bot, User, UserPlus } from 'lucide-react'
+import { Send, ShoppingCart, Sparkles, Bot, User, UserPlus, Grid3x3 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import RegisterPage from './RegisterPage'
 import CheckoutPopup from './CheckoutPopup'
+import ProductGrid from './ProductGrid'
 
 interface Message {
   id: string
   content: string
   role: 'user' | 'assistant'
   timestamp: Date
+}
+
+interface Product {
+  id: string
+  sku: string
+  name: string
+  description: string
+  price: number
+  image_url?: string
 }
 
 function App() {
@@ -21,6 +31,9 @@ function App() {
   const [showCheckout, setShowCheckout] = useState(false)
   const [userEmail, setUserEmail] = useState('')
   const [isRegistered, setIsRegistered] = useState(false)
+  const [showProductGrid, setShowProductGrid] = useState(false)
+  const [products, setProducts] = useState<Product[]>([])
+  const [cartItems, setCartItems] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -130,6 +143,57 @@ function App() {
     setMessages(prev => [...prev, successMessage])
   }
 
+  const fetchProducts = async (query?: string) => {
+    try {
+      const params = query ? `?query=${encodeURIComponent(query)}` : ''
+      const response = await axios.get(`/api/products${params}`)
+      const fetchedProducts = response.data.products.map((p: any) => ({
+        id: p.id,
+        sku: p.sku || p.id,
+        name: p.name,
+        description: p.description || '',
+        price: p.price,
+        image_url: p.image_url
+      }))
+      setProducts(fetchedProducts)
+      setShowProductGrid(true)
+    } catch (error) {
+      console.error('Error fetching products:', error)
+    }
+  }
+
+  const handleAddToCartFromGrid = async (productId: string, productName: string) => {
+    // Send message to chat backend to add to cart
+    const addMessage = `add ${productName} to cart`
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content: addMessage,
+      role: 'user',
+      timestamp: new Date()
+    }
+    setMessages(prev => [...prev, userMessage])
+
+    try {
+      const response = await axios.post('/api/chat', {
+        message: addMessage,
+        session_id: sessionId
+      })
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: response.data.response,
+        role: 'assistant',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, assistantMessage])
+
+      // Update cart items
+      setCartItems(prev => new Set(prev).add(productId))
+    } catch (error) {
+      console.error('Error adding to cart:', error)
+    }
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -163,6 +227,13 @@ function App() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
+            <button
+              onClick={() => fetchProducts()}
+              className="flex items-center space-x-2 text-gray-700 hover:text-primary-600 transition-colors font-medium"
+            >
+              <Grid3x3 className="w-5 h-5" />
+              <span>Browse Products</span>
+            </button>
             {!isRegistered && (
               <button
                 onClick={() => setShowRegister(true)}
@@ -187,7 +258,23 @@ function App() {
 
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-6xl mx-auto space-y-6">
+          {/* Product Grid */}
+          {showProductGrid && (
+            <ProductGrid
+              products={products.map(p => ({
+                id: p.id,
+                sku: p.sku,
+                title: p.name,
+                description: p.description,
+                price: p.price,
+                imageUrl: p.image_url
+              }))}
+              cartItems={cartItems}
+              onAddToCart={handleAddToCartFromGrid}
+            />
+          )}
+
           {messages.map((message) => (
             <div
               key={message.id}
