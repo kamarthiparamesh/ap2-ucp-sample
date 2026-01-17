@@ -74,13 +74,23 @@ class UCPMerchantClient:
             # Convert UCP format (cents) back to dollars
             products = []
             for item in data.get("items", []):
+                # Parse image_url from JSON array string
+                image_url = item.get("image_url")
+                if image_url and isinstance(image_url, str):
+                    try:
+                        import json
+                        urls = json.loads(image_url)
+                        image_url = urls[0] if urls else None
+                    except (json.JSONDecodeError, IndexError):
+                        image_url = None
+
                 products.append({
                     "id": item["id"],
                     "name": item["title"],
                     "description": item.get("description"),
                     "price": item["price"] / 100.0,  # Convert cents to dollars
                     "currency": "USD",
-                    "image_url": item.get("image_url")
+                    "image_url": image_url
                 })
 
             return products
