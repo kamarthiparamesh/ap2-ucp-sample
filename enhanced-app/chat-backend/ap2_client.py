@@ -8,6 +8,7 @@ import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
 import uuid
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,21 @@ class AP2Client:
     async def cleanup(self):
         """Cleanup HTTP client."""
         await self.client.aclose()
+
+    def _generate_token_number(self) -> str:
+        """
+        Generate a 16-digit token number for payment.
+        Similar format to: 5342223122345000
+        """
+        # Generate 16 random digits
+        return ''.join([str(random.randint(0, 9)) for _ in range(16)])
+
+    def _generate_cryptogram(self) -> str:
+        """
+        Generate a random cryptogram for payment security.
+        Returns a 32-character hexadecimal string.
+        """
+        return uuid.uuid4().hex.upper()
 
     def create_payment_mandate(
         self,
@@ -72,7 +88,8 @@ class AP2Client:
                     "request_id": payment_request_id,
                     "method_name": "CARD",
                     "details": {
-                        "token": f"TOK-{uuid.uuid4().hex[:16]}",  # Opaque token
+                        "token": self._generate_token_number(),
+                        "cryptogram": self._generate_cryptogram(),
                         "card_last_four": payment_card.get("card_last_four"),
                         "card_network": payment_card.get("card_network")
                     },
