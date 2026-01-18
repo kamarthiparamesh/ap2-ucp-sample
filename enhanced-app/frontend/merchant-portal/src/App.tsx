@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Plus, Edit2, Trash2, Save, X, Store, MessageSquare, DollarSign } from 'lucide-react'
+import { Plus, Edit2, Trash2, Save, X, Store, MessageSquare, DollarSign, BarChart3 } from 'lucide-react'
+import Dashboard from './Dashboard'
 
 interface Product {
   id: string
@@ -31,6 +32,7 @@ interface ProductFormData {
 }
 
 function App() {
+  const [currentPage, setCurrentPage] = useState<'products' | 'dashboard'>('products')
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -136,6 +138,11 @@ function App() {
     setShowAddForm(false)
   }
 
+  // If dashboard page is active, render it
+  if (currentPage === 'dashboard') {
+    return <Dashboard onBackToProducts={() => setCurrentPage('products')} />
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
@@ -151,15 +158,24 @@ function App() {
                 <p className="text-sm text-gray-500">Manage your products and pricing</p>
               </div>
             </div>
-            <a
-              href="https://chat.abhinava.xyz"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 transition-colors font-medium"
-            >
-              <MessageSquare className="w-5 h-5" />
-              <span>Chat Interface</span>
-            </a>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setCurrentPage('dashboard')}
+                className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 transition-colors font-medium"
+              >
+                <BarChart3 className="w-5 h-5" />
+                <span>Dashboard</span>
+              </button>
+              <a
+                href="https://chat.abhinava.xyz"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 transition-colors font-medium"
+              >
+                <MessageSquare className="w-5 h-5" />
+                <span>Chat Interface</span>
+              </a>
+            </div>
           </div>
         </div>
       </header>

@@ -2,6 +2,17 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { X, CreditCard, ShoppingCart, Shield, CheckCircle, AlertCircle, Loader } from 'lucide-react'
 
+// Helper function to convert ArrayBuffer to URL-safe base64
+function arrayBufferToUrlSafeBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  // Convert to base64 and make it URL-safe
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
 interface CheckoutPopupProps {
   isOpen: boolean
   onClose: () => void
@@ -84,9 +95,14 @@ function CheckoutPopup({ isOpen, onClose, sessionId, userEmail }: CheckoutPopupP
 
       const { challenge } = challengeResponse.data
 
+      // Convert URL-safe base64 to standard base64 for atob()
+      const base64Challenge = challenge.replace(/-/g, '+').replace(/_/g, '/').padEnd(
+        challenge.length + (4 - (challenge.length % 4)) % 4, '='
+      )
+
       // Step 2: Get passkey assertion
       const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
-        challenge: Uint8Array.from(atob(challenge), c => c.charCodeAt(0)),
+        challenge: Uint8Array.from(atob(base64Challenge), c => c.charCodeAt(0)),
         rpId: window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname,
         timeout: 60000,
         userVerification: "preferred"  // Changed from "required" to "preferred" for broader compatibility
@@ -106,10 +122,10 @@ function CheckoutPopup({ isOpen, onClose, sessionId, userEmail }: CheckoutPopupP
       const verifyResponse = await axios.post('/api/auth/verify-passkey', {
         email: userEmail,
         challenge,
-        credential_id: btoa(String.fromCharCode(...new Uint8Array(assertion.rawId))),
-        client_data_json: btoa(String.fromCharCode(...new Uint8Array(assertionResponse.clientDataJSON))),
-        authenticator_data: btoa(String.fromCharCode(...new Uint8Array(assertionResponse.authenticatorData))),
-        signature: btoa(String.fromCharCode(...new Uint8Array(assertionResponse.signature)))
+        credential_id: arrayBufferToUrlSafeBase64(assertion.rawId),
+        client_data_json: arrayBufferToUrlSafeBase64(assertionResponse.clientDataJSON),
+        authenticator_data: arrayBufferToUrlSafeBase64(assertionResponse.authenticatorData),
+        signature: arrayBufferToUrlSafeBase64(assertionResponse.signature)
       })
 
       const { signature: userSignature } = verifyResponse.data
@@ -117,13 +133,18 @@ function CheckoutPopup({ isOpen, onClose, sessionId, userEmail }: CheckoutPopupP
       // Step 4: Confirm checkout with signed mandate
       const confirmResponse = await axios.post('/api/payment/confirm-checkout', {
         mandate_id: mandateId,
-        user_signature: userSignature
+        user_signature: userSignature,
+        user_email: userEmail
       })
 
-      const { status, payment_id, otp_challenge } = confirmResponse.data
+      const { status, receipt, otp_challenge } = confirmResponse.data
 
-      if (status === 'completed') {
-        setPaymentId(payment_id)
+      if (status === 'success') {
+        // Extract payment ID from receipt
+        const paymentId = receipt?.payment_status?.merchant_confirmation_id ||
+                         receipt?.merchant_confirmation_id ||
+                         'CONFIRMED'
+        setPaymentId(paymentId)
         setSuccess(true)
       } else if (status === 'otp_required') {
         setOtpRequired(true)
@@ -158,13 +179,18 @@ function CheckoutPopup({ isOpen, onClose, sessionId, userEmail }: CheckoutPopupP
     try {
       const response = await axios.post('/api/payment/verify-otp', {
         mandate_id: mandateId,
-        otp_code: otpCode
+        otp_code: otpCode,
+        user_email: userEmail
       })
 
-      const { status, payment_id } = response.data
+      const { status, receipt } = response.data
 
-      if (status === 'completed') {
-        setPaymentId(payment_id)
+      if (status === 'success') {
+        // Extract payment ID from receipt
+        const paymentId = receipt?.payment_status?.merchant_confirmation_id ||
+                         receipt?.merchant_confirmation_id ||
+                         'CONFIRMED'
+        setPaymentId(paymentId)
         setSuccess(true)
         setOtpRequired(false)
       } else {

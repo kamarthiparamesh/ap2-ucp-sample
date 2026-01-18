@@ -197,6 +197,80 @@ class PaymentReceipt(Base):
         }
 
 
+class UCPRequestLog(Base):
+    """Log of UCP API requests and responses."""
+    __tablename__ = "ucp_request_logs"
+
+    id = Column(String, primary_key=True)
+    endpoint = Column(String, nullable=False, index=True)  # e.g., "/.well-known/ucp", "/ucp/products/search"
+    method = Column(String, nullable=False)  # GET, POST, etc.
+    query_params = Column(Text)  # JSON: Query parameters
+    request_body = Column(Text)  # JSON: Request body if any
+    response_status = Column(Integer, nullable=False)  # HTTP status code
+    response_body = Column(Text)  # JSON: Response sent
+    client_ip = Column(String)
+    user_agent = Column(String)
+    duration_ms = Column(Float)  # Request duration in milliseconds
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "endpoint": self.endpoint,
+            "method": self.method,
+            "query_params": json.loads(self.query_params) if self.query_params else {},
+            "request_body": json.loads(self.request_body) if self.request_body else None,
+            "response_status": self.response_status,
+            "response_body": json.loads(self.response_body) if self.response_body else None,
+            "client_ip": self.client_ip,
+            "user_agent": self.user_agent,
+            "duration_ms": self.duration_ms,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class AP2RequestLog(Base):
+    """Log of AP2 payment protocol messages."""
+    __tablename__ = "ap2_request_logs"
+
+    id = Column(String, primary_key=True)
+    endpoint = Column(String, nullable=False, index=True)  # e.g., "/ap2/payment/process"
+    method = Column(String, nullable=False)  # POST
+    message_type = Column(String, nullable=False, index=True)  # "payment_mandate", "otp_verification", "payment_receipt"
+    mandate_id = Column(String, index=True)  # Payment mandate ID for correlation
+    request_body = Column(Text, nullable=False)  # JSON: Full AP2 message including signature
+    request_signature = Column(Text)  # User signature from AP2 message
+    response_status = Column(Integer, nullable=False)  # HTTP status code
+    response_body = Column(Text, nullable=False)  # JSON: AP2 response message
+    response_signature = Column(Text)  # Merchant signature in response
+    payment_status = Column(String)  # "success", "otp_required", "failed"
+    client_ip = Column(String)
+    user_agent = Column(String)
+    duration_ms = Column(Float)  # Request duration in milliseconds
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "endpoint": self.endpoint,
+            "method": self.method,
+            "message_type": self.message_type,
+            "mandate_id": self.mandate_id,
+            "request_body": json.loads(self.request_body) if self.request_body else None,
+            "request_signature": self.request_signature,
+            "response_status": self.response_status,
+            "response_body": json.loads(self.response_body) if self.response_body else None,
+            "response_signature": self.response_signature,
+            "payment_status": self.payment_status,
+            "client_ip": self.client_ip,
+            "user_agent": self.user_agent,
+            "duration_ms": self.duration_ms,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+
+
 class DatabaseManager:
     """Manages database connections and operations."""
 

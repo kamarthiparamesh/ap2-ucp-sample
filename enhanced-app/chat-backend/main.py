@@ -53,6 +53,7 @@ class ChatResponse(BaseModel):
     response: str
     session_id: str
     status: str
+    products: Optional[List[Dict[str, Any]]] = None
 
 
 class CartItem(BaseModel):
@@ -90,6 +91,7 @@ class UserRegistration(BaseModel):
     """Model for user registration with passkey."""
     email: str
     display_name: str
+    credential_id: str  # WebAuthn credential ID from browser
     client_data_json: str  # WebAuthn client data
     attestation_object: str  # WebAuthn attestation
     challenge: str
@@ -273,7 +275,8 @@ async def chat(
     return ChatResponse(
         response=result["output"],
         session_id=result["session_id"],
-        status=result["status"]
+        status=result["status"],
+        products=result.get("products")
     )
 
 
@@ -418,7 +421,8 @@ async def register_user(
     verification = webauthn_verifier.verify_registration(
         client_data_json=registration.client_data_json,
         attestation_object=registration.attestation_object,
-        challenge=registration.challenge
+        challenge=registration.challenge,
+        credential_id=registration.credential_id
     )
 
     if not verification.get("valid"):

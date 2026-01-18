@@ -7,6 +7,17 @@ interface RegisterPageProps {
   onBackToChat: () => void
 }
 
+// Helper function to convert ArrayBuffer to URL-safe base64
+function arrayBufferToUrlSafeBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  // Convert to base64 and make it URL-safe
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
 function RegisterPage({ onRegistrationComplete, onBackToChat }: RegisterPageProps) {
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -43,8 +54,13 @@ function RegisterPage({ onRegistrationComplete, onBackToChat }: RegisterPageProp
       // Step 2: Create WebAuthn credential (passkey)
       setStep('passkey')
 
+      // Convert URL-safe base64 to standard base64 for atob()
+      const base64Challenge = challenge.replace(/-/g, '+').replace(/_/g, '/').padEnd(
+        challenge.length + (4 - (challenge.length % 4)) % 4, '='
+      )
+
       const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
-        challenge: Uint8Array.from(atob(challenge), c => c.charCodeAt(0)),
+        challenge: Uint8Array.from(atob(base64Challenge), c => c.charCodeAt(0)),
         rp: {
           name: "AI Shopping Assistant",
           id: window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname
@@ -82,9 +98,9 @@ function RegisterPage({ onRegistrationComplete, onBackToChat }: RegisterPageProp
         email,
         display_name: displayName,
         challenge,
-        credential_id: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
-        client_data_json: btoa(String.fromCharCode(...new Uint8Array(attestationResponse.clientDataJSON))),
-        attestation_object: btoa(String.fromCharCode(...new Uint8Array(attestationResponse.attestationObject)))
+        credential_id: arrayBufferToUrlSafeBase64(credential.rawId),
+        client_data_json: arrayBufferToUrlSafeBase64(attestationResponse.clientDataJSON),
+        attestation_object: arrayBufferToUrlSafeBase64(attestationResponse.attestationObject)
       }
 
       await axios.post('/api/auth/register', registrationData)

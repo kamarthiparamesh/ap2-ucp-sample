@@ -90,7 +90,8 @@ class WebAuthnVerifier:
     def verify_registration(
         client_data_json: str,
         attestation_object: str,
-        challenge: str
+        challenge: str,
+        credential_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Verify WebAuthn registration response.
@@ -126,8 +127,10 @@ class WebAuthnVerifier:
             # 3. Verify attestation signature
             # 4. Extract credential ID and public key
 
-            # For simplified demo, generate credential info
-            credential_id = base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8').rstrip('=')
+            # Use the credential_id provided from the frontend (from browser's WebAuthn API)
+            # If not provided, fall back to generating one (for backward compatibility)
+            if not credential_id:
+                credential_id = base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8').rstrip('=')
 
             # In production, extract actual public key from attestation
             # For demo, generate a placeholder

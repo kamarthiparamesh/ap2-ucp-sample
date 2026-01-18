@@ -43,17 +43,15 @@ IMPORTANT INSTRUCTIONS:
 3. If you see a "✅ SUCCESS" message in the conversation, acknowledge that the item was added to the cart.
 4. If you see a "❌" message, inform the user that the product wasn't found.
 5. When users ask to see their cart with phrases like "show my cart" or "what's in my cart", I will provide the complete cart contents.
-6. IMPORTANT: When I provide product information with image URLs, you MUST include the images in your response using markdown image syntax: ![Product Name](image_url)
-   - Place the image on its own line before the product name
-   - Example format:
-     ![Chocochip Cookies](https://images.unsplash.com/photo-xxx)
-     **Chocochip Cookies** - $4.99
-     Description here
+6. IMPORTANT: When users search for products, interactive product cards will be displayed automatically below your message.
+   - DO NOT list product details like names, prices, or descriptions in your text response
+   - Instead, just provide a brief, friendly message like "Here are some great options for you!" or "I found these products:"
+   - The product cards will show all the details (images, prices, descriptions, add-to-cart buttons)
+   - Keep your response SHORT and conversational
 
 Be friendly, helpful, and enthusiastic about helping customers shop!
-When customers ask about products, I will provide you with the product information and image URLs from our catalog.
-Always include product images when available.
 Always be clear when items are successfully added to the cart.
+Keep responses concise when product cards will be shown.
 """
 
     async def initialize(self):
@@ -202,6 +200,7 @@ Always be clear when items are successfully added to the cart.
 
             context = ""
             cart_action_result = None
+            products = []  # Initialize products list
 
             # Handle add to cart
             if is_add_to_cart:
@@ -287,12 +286,7 @@ Always be clear when items are successfully added to the cart.
 
                 products = await self.search_products(query=search_query)
                 if products:
-                    context += "\n\nAvailable products (include images in your response using markdown format):\n"
-                    for p in products:
-                        img_url = p.get('image_url', '')
-                        context += f"- {p['name']} (${p['price']:.2f}) - {p.get('description', 'No description')}\n"
-                        if img_url:
-                            context += f"  Image: {img_url}\n"
+                    context += f"\n\nFound {len(products)} products matching the search. Product cards will be displayed automatically - just provide a brief friendly message.\n"
 
             # Build conversation messages
             messages = [SystemMessage(content=self.system_prompt)]
@@ -324,7 +318,10 @@ Always be clear when items are successfully added to the cart.
 
             # If we searched for products, include them in the response
             if should_search and products:
+                logger.info(f"Including {len(products)} products in response for session {session_id}")
                 response_data["products"] = products
+            else:
+                logger.info(f"Not including products: should_search={should_search}, products_count={len(products) if products else 0}")
 
             return response_data
 

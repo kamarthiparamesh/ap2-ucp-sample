@@ -14,12 +14,15 @@ import os
 from datetime import datetime
 from dotenv import load_dotenv
 
-from database import db_manager, Product
-from sqlalchemy import select
+from database import db_manager, Product, UCPRequestLog, AP2RequestLog
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 from merchant_payment_agent import MerchantPaymentAgent
 from ap2_types import PaymentMandate as AP2PaymentMandate, PaymentReceipt as AP2PaymentReceipt, OTPVerification
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+import time
 
 # Load environment variables
 load_dotenv()
@@ -211,6 +214,118 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============================================================================
+# Request Logging Middleware
+# ============================================================================
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware to log UCP and AP2 requests/responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+
+        # Capture request body
+        request_body = None
+        if request.method in ["POST", "PUT", "PATCH"]:
+            body = await request.body()
+            if body:
+                try:
+                    request_body = json.loads(body.decode())
+                except:
+                    request_body = body.decode()
+
+        # Process request
+        response = await call_next(request)
+
+        # Calculate duration
+        duration_ms = (time.time() - start_time) * 1000
+
+        # Log UCP and AP2 requests
+        path = request.url.path
+        if path.startswith("/.well-known/ucp") or path.startswith("/ucp/"):
+            # Log UCP request
+            await self._log_ucp_request(
+                request=request,
+                response=response,
+                request_body=request_body,
+                duration_ms=duration_ms
+            )
+        elif path.startswith("/ap2/"):
+            # Log AP2 request
+            await self._log_ap2_request(
+                request=request,
+                response=response,
+                request_body=request_body,
+                duration_ms=duration_ms
+            )
+
+        return response
+
+    async def _log_ucp_request(self, request: Request, response: Response, request_body, duration_ms):
+        """Log UCP API request."""
+        try:
+            async for session in db_manager.get_session():
+                log_entry = UCPRequestLog(
+                    id=str(uuid.uuid4()),
+                    endpoint=request.url.path,
+                    method=request.method,
+                    query_params=json.dumps(dict(request.query_params)) if request.query_params else None,
+                    request_body=json.dumps(request_body) if request_body else None,
+                    response_status=response.status_code,
+                    response_body=None,  # Will be set by endpoint if needed
+                    client_ip=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                    duration_ms=duration_ms
+                )
+                session.add(log_entry)
+                await session.commit()
+        except Exception as e:
+            print(f"Error logging UCP request: {e}")
+
+    async def _log_ap2_request(self, request: Request, response: Response, request_body, duration_ms):
+        """Log AP2 payment request."""
+        try:
+            # Extract AP2-specific fields
+            mandate_id = None
+            request_signature = None
+            message_type = "unknown"
+
+            if isinstance(request_body, dict):
+                if "payment_mandate_contents" in request_body:
+                    message_type = "payment_mandate"
+                    mandate_id = request_body.get("payment_mandate_contents", {}).get("payment_mandate_id")
+                    request_signature = request_body.get("user_authorization")
+                elif "otp_code" in request_body:
+                    message_type = "otp_verification"
+                    mandate_id = request_body.get("mandate_id")
+
+            async for session in db_manager.get_session():
+                log_entry = AP2RequestLog(
+                    id=str(uuid.uuid4()),
+                    endpoint=request.url.path,
+                    method=request.method,
+                    message_type=message_type,
+                    mandate_id=mandate_id,
+                    request_body=json.dumps(request_body) if request_body else "{}",
+                    request_signature=request_signature,
+                    response_status=response.status_code,
+                    response_body="{}",  # Will be set by endpoint if needed
+                    response_signature=None,  # Will be set by endpoint if needed
+                    payment_status=None,  # Will be set by endpoint
+                    client_ip=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                    duration_ms=duration_ms
+                )
+                session.add(log_entry)
+                await session.commit()
+        except Exception as e:
+            print(f"Error logging AP2 request: {e}")
+
+
+# Add logging middleware
+app.add_middleware(RequestLoggingMiddleware)
 
 
 # ============================================================================
@@ -632,6 +747,87 @@ async def verify_otp_and_process(
     # OTP verified, process payment
     receipt = payment_agent.process_payment(mandate)
     return receipt
+
+
+# ============================================================================
+# Dashboard API Endpoints
+# ============================================================================
+
+@app.get("/api/dashboard/ucp-logs")
+async def get_ucp_logs(
+    limit: int = 50,
+    offset: int = 0,
+    endpoint_filter: Optional[str] = None,
+    session: AsyncSession = Depends(get_db)
+):
+    """Get UCP request logs for dashboard."""
+    query = select(UCPRequestLog).order_by(desc(UCPRequestLog.created_at))
+
+    if endpoint_filter:
+        query = query.where(UCPRequestLog.endpoint.like(f"%{endpoint_filter}%"))
+
+    query = query.limit(limit).offset(offset)
+
+    result = await session.execute(query)
+    logs = result.scalars().all()
+
+    return {
+        "logs": [log.to_dict() for log in logs],
+        "total": len(logs),
+        "limit": limit,
+        "offset": offset
+    }
+
+
+@app.get("/api/dashboard/ap2-logs")
+async def get_ap2_logs(
+    limit: int = 50,
+    offset: int = 0,
+    message_type_filter: Optional[str] = None,
+    session: AsyncSession = Depends(get_db)
+):
+    """Get AP2 payment request logs for dashboard."""
+    query = select(AP2RequestLog).order_by(desc(AP2RequestLog.created_at))
+
+    if message_type_filter:
+        query = query.where(AP2RequestLog.message_type == message_type_filter)
+
+    query = query.limit(limit).offset(offset)
+
+    result = await session.execute(query)
+    logs = result.scalars().all()
+
+    return {
+        "logs": [log.to_dict() for log in logs],
+        "total": len(logs),
+        "limit": limit,
+        "offset": offset
+    }
+
+
+@app.get("/api/dashboard/stats")
+async def get_dashboard_stats(session: AsyncSession = Depends(get_db)):
+    """Get dashboard statistics."""
+    # Count UCP requests
+    ucp_count_result = await session.execute(select(UCPRequestLog))
+    ucp_count = len(ucp_count_result.scalars().all())
+
+    # Count AP2 requests
+    ap2_count_result = await session.execute(select(AP2RequestLog))
+    ap2_count = len(ap2_count_result.scalars().all())
+
+    # Count successful payments
+    ap2_success_result = await session.execute(
+        select(AP2RequestLog).where(AP2RequestLog.payment_status == "success")
+    )
+    payment_success_count = len(ap2_success_result.scalars().all())
+
+    return {
+        "total_ucp_requests": ucp_count,
+        "total_ap2_requests": ap2_count,
+        "successful_payments": payment_success_count,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 # ============================================================================
