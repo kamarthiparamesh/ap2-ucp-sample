@@ -355,7 +355,7 @@ function CheckoutPopup({ isOpen, onClose, sessionId, userEmail, onPaymentSuccess
                   disabled={loading}
                 />
                 <p className="text-xs text-gray-500 mt-2 text-center">
-                  For demo: Use any 6-digit code
+                  For demo: Enter <strong className="text-gray-700">123456</strong>
                 </p>
               </div>
 

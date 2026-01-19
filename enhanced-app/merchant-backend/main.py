@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 import json
 import os
+import logging
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -29,6 +30,9 @@ from io import BytesIO
 
 # Load environment variables
 load_dotenv()
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================

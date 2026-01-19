@@ -103,10 +103,14 @@ class MerchantPaymentAgent:
         return False
 
     def generate_otp(self, mandate_id: str) -> str:
-        """Generate OTP for payment verification."""
-        otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        """
+        Generate OTP for payment verification.
+        For demo purposes, always returns 123456.
+        In production, this would generate a random OTP and send via SMS/email.
+        """
+        otp = '123456'  # Fixed OTP for demo purposes
         self.pending_otps[mandate_id] = otp
-        logger.info(f"Generated OTP for mandate {mandate_id}: {otp}")
+        logger.info(f"Generated OTP for mandate {mandate_id}: {otp} (demo mode)")
         return otp
 
     def verify_otp(self, mandate_id: str, otp_code: str) -> bool:
