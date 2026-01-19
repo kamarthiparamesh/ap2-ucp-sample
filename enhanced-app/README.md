@@ -190,7 +190,7 @@ POST http://localhost:8453/ucp/v1/checkout-sessions
     {"id": "PROD-001", "sku": "PROD-001", "name": "Cookies", "quantity": 2, "price": 4.99}
   ],
   "buyer_email": "user@example.com",
-  "currency": "USD"
+  "currency": "SGD"
 }
 
 # Response
@@ -198,7 +198,7 @@ POST http://localhost:8453/ucp/v1/checkout-sessions
   "id": "cs_a1b2c3d4e5f67890",
   "status": "incomplete",
   "line_items": [...],
-  "totals": {"subtotal": 9.98, "tax": 0.0, "total": 9.98, "currency": "USD"}
+  "totals": {"subtotal": 9.98, "tax": 0.0, "total": 9.98, "currency": "SGD"}
 }
 
 # Update session with AP2 payment mandate
@@ -311,7 +311,7 @@ DELETE /api/dashboard/clear-logs   # Clear all logs
     "payment_details_total": {
       "label": "Total",
       "amount": {
-        "currency": "USD",
+        "currency": "SGD",
         "value": 15.99
       }
     },
@@ -340,7 +340,7 @@ DELETE /api/dashboard/clear-logs   # Clear all logs
 {
   "payment_mandate_id": "PM-1A2B3C4D5E6F7890",
   "payment_id": "PAY-ABC123456789",
-  "amount": {"currency": "USD", "value": 15.99},
+  "amount": {"currency": "SGD", "value": 15.99},
   "payment_status": {
     "status_code": "SUCCESS",
     "message": "Payment processed successfully"

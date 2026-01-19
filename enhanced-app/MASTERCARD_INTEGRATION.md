@@ -139,7 +139,7 @@ Initiates authentication for a card-on-file transaction.
 auth_response = await mastercard.authentication.initiate_authentication(
     token="DWSPMC000...",
     amount=15.99,
-    currency="USD",
+    currency="SGD",
     merchant_id="merchant-001",
     transaction_id="cs_abc123"
 )
