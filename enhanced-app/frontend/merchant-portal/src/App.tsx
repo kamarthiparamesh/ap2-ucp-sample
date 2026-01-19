@@ -42,7 +42,7 @@ function App() {
     name: '',
     description: '',
     price: '',
-    currency: 'USD',
+    currency: 'SGD',
     category: '',
     brand: '',
     image_url: ''
@@ -129,7 +129,7 @@ function App() {
       name: '',
       description: '',
       price: '',
-      currency: 'USD',
+      currency: 'SGD',
       category: '',
       brand: '',
       image_url: ''
