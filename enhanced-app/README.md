@@ -392,6 +392,209 @@ DELETE /api/dashboard/clear-logs   # Clear all logs
    - Merchant agent stores: products only
    - Zero trust architecture
 
+6. **[OPTIONAL] Mastercard Network Tokenization**
+   - Card-on-File tokenization replaces PAN with network token
+   - Secure Card-on-File authentication adds risk-based challenges
+   - OAuth 1.0a signed requests with RSA-SHA256
+   - Fully optional - disabled by default
+
+## 💳 Mastercard Integration Logic (Optional)
+
+### Overview
+
+The application includes **optional** integration with Mastercard's Card on File (CoF) and Secure Card on File (SCoF) APIs. This feature is **disabled by default** and the app works completely without it.
+
+**When enabled**, Mastercard APIs add two enhancements:
+1. **Tokenization** - During registration, card numbers are replaced with network tokens
+2. **Authentication** - During payment, additional risk-based authentication may be required
+
+### Registration Flow with Mastercard
+
+```
+Standard Flow (MASTERCARD_ENABLED=false):
+───────────────────────────────────────────
+1. User provides email + display name
+2. Browser creates WebAuthn passkey
+3. Chat backend creates User record
+4. Chat backend creates PaymentCard with encrypted card number
+5. Registration complete
+
+Enhanced Flow (MASTERCARD_ENABLED=true):
+────────────────────────────────────────────
+1. User provides email + display name
+2. Browser creates WebAuthn passkey
+3. Chat backend creates User record
+4. Chat backend creates PaymentCard with encrypted card number
+5. Chat backend calls Mastercard Tokenization API
+   └─ POST https://sandbox.api.mastercard.com/mdes/digitization/tokenize
+   └─ OAuth 1.0a signed request
+6. If successful:
+   └─ Store network token in payment_card.mastercard_token
+   └─ Set payment_card.is_tokenized = True
+7. If failed:
+   └─ Log error
+   └─ Continue with encrypted card (fallback)
+8. Registration complete
+```
+
+**Code Location:** [chat-backend/main.py:484-506](chat-backend/main.py#L484-L506)
+
+### Payment Flow with Mastercard
+
+```
+Standard Flow (MASTERCARD_ENABLED=false or card not tokenized):
+───────────────────────────────────────────────────────────────
+1. User clicks "Confirm Payment with Passkey"
+2. Browser collects WebAuthn signature
+3. Chat backend signs payment mandate
+4. Chat backend sends mandate to merchant via UCP
+5. Merchant processes payment
+6. [Optional] Standard OTP challenge (10-30% probability)
+7. Payment complete
+
+Enhanced Flow (MASTERCARD_ENABLED=true and card.is_tokenized=True):
+───────────────────────────────────────────────────────────────────
+1. User clicks "Confirm Payment with Passkey"
+2. Browser collects WebAuthn signature
+3. Chat backend checks if card is tokenized
+4. Chat backend calls Mastercard Authentication API
+   └─ POST https://sandbox.api.mastercard.com/scof/authenticate
+   └─ Passes: network token, amount, merchant ID
+5. Mastercard risk engine evaluates transaction
+6. If authentication required:
+   ├─ Create MastercardAuthenticationChallenge record
+   ├─ Return OTP challenge to user
+   ├─ User enters 6-digit code
+   ├─ POST /api/payment/verify-mastercard-auth
+   └─ Verify code with Mastercard API
+7. If authentication approved or not required:
+   └─ Continue to step 8
+8. Chat backend signs payment mandate
+9. Chat backend sends mandate to merchant via UCP
+10. Merchant processes payment
+11. [Optional] Standard OTP challenge (separate from Mastercard)
+12. Payment complete
+```
+
+**Code Locations:**
+- Initial auth check: [chat-backend/main.py:807-856](chat-backend/main.py#L807-L856)
+- Verification endpoint: [chat-backend/main.py:1021-1156](chat-backend/main.py#L1021-L1156)
+
+### Database Schema Extensions
+
+When Mastercard is enabled, the following database changes are made:
+
+**PaymentCard table additions:**
+```python
+mastercard_token = Column(String)              # Network token (e.g., "4111111111111111")
+mastercard_token_ref = Column(String)          # Unique reference (e.g., "DWSPMC000...")
+mastercard_token_assurance = Column(String)    # Assurance level ("high", "medium", "low")
+tokenization_date = Column(DateTime)           # When tokenization occurred
+is_tokenized = Column(Boolean, default=False)  # Flag indicating tokenization status
+```
+
+**New table: mastercard_auth_challenges**
+```python
+id = Column(String, primary_key=True)
+payment_mandate_id = Column(String, ForeignKey("payment_mandates.id"))
+challenge_id = Column(String)                  # Mastercard's challenge ID
+transaction_id = Column(String)                # UCP checkout session ID
+authentication_method = Column(String)         # "otp", "biometric", "none"
+status = Column(String)                        # "pending", "approved", "declined", "expired"
+verification_code = Column(String)             # Temporary OTP storage
+attempts = Column(Integer, default=0)          # Failed attempts counter
+created_at = Column(DateTime)
+verified_at = Column(DateTime)
+expires_at = Column(DateTime)                  # Challenges expire in 5 minutes
+raw_response = Column(Text)                    # Full API response (JSON)
+```
+
+**Schema Location:** [chat-backend/database.py](chat-backend/database.py)
+
+### Fallback Behavior
+
+The Mastercard integration is designed to **never break** the payment flow:
+
+| Scenario | Behavior |
+|----------|----------|
+| MASTERCARD_ENABLED=false | Uses encrypted card storage, no API calls |
+| Invalid credentials | Logs error, uses encrypted card storage |
+| Tokenization fails | Logs error, continues with encrypted card |
+| Authentication API error | Logs error, proceeds to payment |
+| Verification timeout | Challenge expires, user can retry checkout |
+
+**All errors are caught and logged** - the payment flow always continues.
+
+### OAuth 1.0a Signature Process
+
+Mastercard APIs require OAuth 1.0a with RSA-SHA256 signatures:
+
+```python
+# 1. Generate OAuth parameters
+oauth_params = {
+    "oauth_consumer_key": MASTERCARD_CONSUMER_KEY,
+    "oauth_nonce": random_32_char_string(),
+    "oauth_timestamp": unix_timestamp(),
+    "oauth_signature_method": "RSA-SHA256",
+    "oauth_version": "1.0",
+    "oauth_body_hash": base64(sha256(request_body))
+}
+
+# 2. Create signature base string
+base_string = f"{method}&{url_encoded}&{params_encoded}"
+
+# 3. Sign with private key
+signature = rsa_sign_sha256(private_key, base_string)
+oauth_params["oauth_signature"] = base64(signature)
+
+# 4. Add Authorization header
+headers["Authorization"] = f'OAuth {format_oauth_params(oauth_params)}'
+```
+
+**Implementation:** [chat-backend/mastercard_client.py:77-140](chat-backend/mastercard_client.py)
+
+### Testing Mastercard Integration
+
+**1. Get sandbox credentials:**
+- Sign up at https://developer.mastercard.com/
+- Create project for "Card on File" and "Secure Card on File"
+- Download consumer key and signing key (.p12)
+- Convert to .pem: `openssl pkcs12 -in key.p12 -out key.pem -nodes`
+
+**2. Configure environment:**
+```bash
+# Edit enhanced-app/chat-backend/.env
+MASTERCARD_ENABLED=true
+MASTERCARD_CONSUMER_KEY=your_consumer_key_here
+MASTERCARD_SIGNING_KEY_PATH=/absolute/path/to/signing-key.pem
+MASTERCARD_SANDBOX=true
+```
+
+**3. Restart and test:**
+```bash
+./stop-split.sh && ./start-split.sh
+
+# Watch logs for Mastercard activity
+tail -f enhanced-app/chat-backend/chat-backend.log | grep -i mastercard
+```
+
+**4. Expected log output:**
+```
+INFO:     Mastercard API integration enabled
+INFO:main:Tokenizing card for user test@example.com with Mastercard API
+INFO:main:Card tokenized successfully for test@example.com: DWSPMC000...
+INFO:main:Initiating Mastercard authentication for mandate PM-ABC123
+INFO:main:Mastercard authentication required: otp
+INFO:main:Mastercard authentication verified, payment successful
+```
+
+### Documentation
+
+For complete Mastercard integration documentation, see:
+- **[Mastercard Integration Guide](MASTERCARD_INTEGRATION.md)** - Full setup and API reference
+- **[Mastercard Setup Guide](MASTERCARD_SETUP.md)** - Step-by-step credential setup
+- **[Mastercard Developer Portal](https://developer.mastercard.com/)** - Official API docs
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -447,13 +650,36 @@ DELETE /api/dashboard/clear-logs   # Clear all logs
    - A default Mastercard (ending in 5678) will be automatically added
 
 6. **[OPTIONAL] Enable Mastercard Integration**
-   See [Mastercard Integration Guide](MASTERCARD_INTEGRATION.md) for details.
+
+   The application supports optional Mastercard Card on File tokenization and Secure Card on File authentication. This is **disabled by default** and the app works fully without it.
+
+   **Key Features:**
+   - Card tokenization during registration (replaces PAN with network token)
+   - Additional authentication layer during checkout (OTP/biometric)
+   - OAuth 1.0a signed API requests to Mastercard sandbox/production
+   - Fallback to encrypted card storage if tokenization fails
+
+   **To enable:**
    ```bash
    # Edit enhanced-app/chat-backend/.env
    MASTERCARD_ENABLED=true
-   MASTERCARD_CONSUMER_KEY=your_key_here
-   MASTERCARD_SIGNING_KEY_PATH=/path/to/signing-key.pem
+   MASTERCARD_CONSUMER_KEY=your_consumer_key_from_mastercard_portal
+   MASTERCARD_SIGNING_KEY_PATH=/absolute/path/to/signing-key.pem
+   MASTERCARD_SANDBOX=true  # Use sandbox for testing
    ```
+
+   **Code References:**
+   - Mastercard Client: [chat-backend/mastercard_client.py](chat-backend/mastercard_client.py)
+   - Tokenization Logic: [chat-backend/main.py:484-506](chat-backend/main.py#L484-L506)
+   - Authentication Logic: [chat-backend/main.py:807-856](chat-backend/main.py#L807-L856)
+   - Database Models: [chat-backend/database.py:49-55, 164-193](chat-backend/database.py#L49-L55)
+
+   **Full Documentation:** See [Mastercard Integration Guide](MASTERCARD_INTEGRATION.md) for:
+   - Getting API credentials from developer.mastercard.com
+   - Converting .p12 keys to .pem format
+   - Database schema extensions (payment_cards, mastercard_auth_challenges)
+   - API endpoint reference
+   - Testing and troubleshooting
 
 7. **Stop all services**
    ```bash
