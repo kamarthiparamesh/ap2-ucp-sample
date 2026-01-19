@@ -56,6 +56,7 @@ The application is split into two independent backends that communicate via UCP:
   - **Credentials Provider**: Stores user accounts, payment cards (encrypted), and passkeys
   - WebAuthn/FIDO2 passkey authentication
   - Payment mandate creation and signing
+  - **[OPTIONAL] Mastercard Integration**: Card tokenization and authentication (disabled by default)
   - Separate SQLite database for user credentials (`chat_app.db`)
 
 #### 2. **Merchant Backend** (Port 8453) - UCP Server + AP2 Merchant Agent
@@ -435,7 +436,16 @@ DELETE /api/dashboard/clear-logs   # Clear all logs
    - **Chat Backend API**: http://localhost:8452/docs
    - **Merchant Backend API**: http://localhost:8453/docs
 
-5. **Stop all services**
+5. **[OPTIONAL] Enable Mastercard Integration**
+   See [Mastercard Integration Guide](MASTERCARD_INTEGRATION.md) for details.
+   ```bash
+   # Edit chat-backend/.env
+   MASTERCARD_ENABLED=true
+   MASTERCARD_CONSUMER_KEY=your_key_here
+   MASTERCARD_SIGNING_KEY_PATH=/path/to/signing-key.pem
+   ```
+
+6. **Stop all services**
    ```bash
    ./stop-split.sh
    ```
@@ -557,6 +567,7 @@ The chat backend will:
 - 🔗 **UCP + AP2 integration** - Payments via UCP checkout sessions
 - 📋 **Full audit trail** - Request/response logging in dashboard
 - 🛡️ **Zero trust architecture** - Credentials and products separated
+- 💳 **[OPTIONAL] Mastercard API** - Card tokenization and secure authentication ([docs](MASTERCARD_INTEGRATION.md))
 
 ## 🔧 Configuration
 

@@ -18,7 +18,7 @@ import uuid
 import json
 
 from ollama_agent import EnhancedBusinessAgent
-from database import db_manager, User, PaymentCard, PaymentMandate, PaymentReceipt
+from database import db_manager, User, PaymentCard, PaymentMandate, PaymentReceipt, MastercardAuthenticationChallenge
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from payment_utils import (
@@ -28,6 +28,7 @@ from payment_utils import (
     otp_manager
 )
 from ap2_client import AP2Client
+from mastercard_client import MastercardClient
 
 # Load environment variables
 load_dotenv()
@@ -168,11 +169,20 @@ async def lifespan(app: FastAPI):
     app.state.ap2_client = AP2Client(merchant_url)
     logger.info("AP2 client initialized")
 
+    # Initialize Mastercard client (for tokenization and authentication)
+    app.state.mastercard_client = MastercardClient(sandbox=True)
+    if app.state.mastercard_client.enabled:
+        logger.info("Mastercard API integration enabled")
+    else:
+        logger.warning("Mastercard API integration disabled (credentials not configured)")
+
     yield
 
     # Shutdown
     await app.state.agent.cleanup()
     await app.state.ap2_client.cleanup()
+    if app.state.mastercard_client.enabled:
+        await app.state.mastercard_client.cleanup()
     logger.info("Chat backend shutdown complete")
 
 
@@ -204,6 +214,11 @@ app.add_middleware(
 def get_agent() -> EnhancedBusinessAgent:
     """Get agent instance."""
     return app.state.agent
+
+
+def get_mastercard_client() -> MastercardClient:
+    """Get Mastercard API client instance."""
+    return app.state.mastercard_client
 
 
 async def get_db() -> AsyncSession:
@@ -401,11 +416,13 @@ async def get_registration_challenge(request: ChallengeRequest):
 @app.post("/api/auth/register", response_model=UserRegistrationResponse, status_code=201)
 async def register_user(
     registration: UserRegistration,
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
+    mastercard: MastercardClient = Depends(get_mastercard_client)
 ):
     """
     Register a new user with WebAuthn passkey.
     Automatically creates default payment card (5123 1212 2232 5678).
+    Tokenizes card with Mastercard API if enabled.
     This chat backend acts as the Credentials Provider in AP2.
     """
     # Check if user already exists
@@ -463,12 +480,36 @@ async def register_user(
         is_default=True
     )
 
+    # Tokenize card with Mastercard API if enabled
+    if mastercard.enabled and card_network == "mastercard":
+        try:
+            logger.info(f"Tokenizing card for user {registration.email} with Mastercard API")
+            token_response = await mastercard.tokenization.tokenize_card(
+                card_number=default_card_number.replace(" ", ""),
+                expiry_month=12,
+                expiry_year=2028,
+                cardholder_name=registration.display_name
+            )
+
+            # Store Mastercard token data
+            payment_card.mastercard_token = token_response["token"]
+            payment_card.mastercard_token_ref = token_response["token_unique_reference"]
+            payment_card.mastercard_token_assurance = token_response["token_assurance_level"]
+            payment_card.tokenization_date = datetime.utcnow()
+            payment_card.is_tokenized = True
+
+            logger.info(f"Card tokenized successfully for {registration.email}: {token_response['token_unique_reference'][:20]}...")
+        except Exception as e:
+            logger.error(f"Failed to tokenize card with Mastercard API: {e}")
+            logger.info("Continuing with encrypted card storage only")
+            # Continue without tokenization - fall back to encrypted storage
+
     session.add(payment_card)
     await session.commit()
     await session.refresh(new_user)
     await session.refresh(payment_card)
 
-    logger.info(f"User registered: {registration.email} with default card ending {last_four}")
+    logger.info(f"User registered: {registration.email} with default card ending {last_four} (tokenized: {payment_card.is_tokenized})")
 
     return UserRegistrationResponse(
         user_id=user_id,
@@ -734,10 +775,12 @@ async def prepare_checkout(
 async def confirm_checkout(
     request: ConfirmCheckoutRequest,
     ap2_client: AP2Client = Depends(get_ap2_client),
+    mastercard: MastercardClient = Depends(get_mastercard_client),
     session: AsyncSession = Depends(get_db)
 ):
     """
     Confirm checkout - sign mandate and send to merchant for payment processing.
+    Optionally uses Mastercard authentication if enabled.
     """
     # Get mandate from database
     result = await session.execute(
@@ -753,6 +796,64 @@ async def confirm_checkout(
 
     if db_mandate.status != "pending":
         raise HTTPException(status_code=400, detail=f"Mandate already {db_mandate.status}")
+
+    # Get payment card to check if tokenized
+    card_result = await session.execute(
+        select(PaymentCard).where(PaymentCard.id == db_mandate.payment_card_id)
+    )
+    payment_card = card_result.scalar_one_or_none()
+
+    # Mastercard Authentication (if enabled and card is tokenized)
+    if mastercard.enabled and payment_card and payment_card.is_tokenized:
+        try:
+            logger.info(f"Initiating Mastercard authentication for mandate {request.mandate_id}")
+
+            # Initiate authentication with Mastercard
+            auth_response = await mastercard.authentication.initiate_authentication(
+                token=payment_card.mastercard_token_ref,
+                amount=db_mandate.total_amount,
+                currency=db_mandate.currency,
+                merchant_id=os.getenv("MERCHANT_ID", "merchant-001"),
+                transaction_id=db_mandate.checkout_session_id
+            )
+
+            # Store authentication challenge
+            if auth_response.get("authentication_required"):
+                challenge_id = str(uuid.uuid4())
+                auth_challenge = MastercardAuthenticationChallenge(
+                    id=challenge_id,
+                    payment_mandate_id=request.mandate_id,
+                    challenge_id=auth_response["challenge_id"],
+                    transaction_id=db_mandate.checkout_session_id,
+                    authentication_method=auth_response["authentication_method"],
+                    status="pending",
+                    created_at=datetime.utcnow(),
+                    expires_at=datetime.utcnow() + timedelta(minutes=5),
+                    raw_response=json.dumps(auth_response.get("raw_response", {}))
+                )
+                session.add(auth_challenge)
+
+                # Update mandate status
+                db_mandate.status = "mastercard_auth_required"
+                await session.commit()
+
+                logger.info(f"Mastercard authentication required: {auth_response['authentication_method']}")
+
+                return ConfirmCheckoutResponse(
+                    status="mastercard_auth_required",
+                    otp_challenge={
+                        "challenge_id": challenge_id,
+                        "authentication_method": auth_response["authentication_method"],
+                        "message": "Mastercard authentication required. Please complete authentication."
+                    },
+                    message=f"Mastercard {auth_response['authentication_method']} authentication required"
+                )
+            else:
+                logger.info(f"Mastercard authentication approved automatically for mandate {request.mandate_id}")
+
+        except Exception as e:
+            logger.error(f"Mastercard authentication error: {e}")
+            logger.info("Continuing with standard payment flow")
 
     # Add signature to mandate
     mandate_data = json.loads(db_mandate.mandate_data)
@@ -906,6 +1007,152 @@ async def verify_otp_and_complete(
         return ConfirmCheckoutResponse(
             status="failed",
             message=f"OTP verification failed: {str(e)}"
+        )
+
+
+class VerifyMastercardAuthRequest(BaseModel):
+    """Request to verify Mastercard authentication challenge."""
+    challenge_id: str
+    verification_code: str
+    mandate_id: str
+    user_email: str
+
+
+@app.post("/api/payment/verify-mastercard-auth", response_model=ConfirmCheckoutResponse)
+async def verify_mastercard_authentication(
+    request: VerifyMastercardAuthRequest,
+    mastercard: MastercardClient = Depends(get_mastercard_client),
+    ap2_client: AP2Client = Depends(get_ap2_client),
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Verify Mastercard authentication challenge and complete payment.
+    """
+    if not mastercard.enabled:
+        raise HTTPException(status_code=400, detail="Mastercard authentication not enabled")
+
+    # Get authentication challenge
+    result = await session.execute(
+        select(MastercardAuthenticationChallenge).where(
+            MastercardAuthenticationChallenge.id == request.challenge_id,
+            MastercardAuthenticationChallenge.payment_mandate_id == request.mandate_id
+        )
+    )
+    auth_challenge = result.scalar_one_or_none()
+
+    if not auth_challenge:
+        raise HTTPException(status_code=404, detail="Authentication challenge not found")
+
+    if auth_challenge.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Challenge already {auth_challenge.status}")
+
+    # Check expiry
+    if datetime.utcnow() > auth_challenge.expires_at:
+        auth_challenge.status = "expired"
+        await session.commit()
+        raise HTTPException(status_code=400, detail="Authentication challenge expired")
+
+    # Verify with Mastercard
+    try:
+        logger.info(f"Verifying Mastercard authentication for challenge {request.challenge_id}")
+
+        auth_result = await mastercard.authentication.verify_authentication(
+            challenge_id=auth_challenge.challenge_id,
+            verification_code=request.verification_code
+        )
+
+        if auth_result.get("verified"):
+            # Authentication successful
+            auth_challenge.status = "approved"
+            auth_challenge.verified_at = datetime.utcnow()
+            await session.commit()
+
+            # Get mandate and proceed with payment
+            mandate_result = await session.execute(
+                select(PaymentMandate).where(
+                    PaymentMandate.id == request.mandate_id,
+                    PaymentMandate.user_email == request.user_email
+                )
+            )
+            db_mandate = mandate_result.scalar_one_or_none()
+
+            if not db_mandate:
+                raise HTTPException(status_code=404, detail="Payment mandate not found")
+
+            # Update mandate status
+            db_mandate.status = "signed"
+            db_mandate.signed_at = datetime.utcnow()
+
+            # Get mandate data
+            mandate_data = json.loads(db_mandate.mandate_data)
+
+            # Complete UCP checkout
+            await ap2_client.update_checkout_with_mandate(
+                session_id=db_mandate.checkout_session_id,
+                mandate=mandate_data,
+                user_signature=db_mandate.user_signature
+            )
+
+            completion_result = await ap2_client.complete_checkout(
+                session_id=db_mandate.checkout_session_id
+            )
+
+            # Check if standard OTP challenge (in addition to Mastercard auth)
+            otp_challenge = ap2_client.extract_otp_challenge(completion_result)
+            if otp_challenge:
+                db_mandate.status = "otp_required"
+                await session.commit()
+
+                logger.info(f"Additional OTP required after Mastercard auth for checkout {db_mandate.checkout_session_id}")
+                return ConfirmCheckoutResponse(
+                    status="otp_required",
+                    otp_challenge=otp_challenge,
+                    message="Additional OTP verification required"
+                )
+
+            # Payment successful
+            receipt = completion_result.get("receipt", {})
+            db_mandate.status = "completed"
+            db_mandate.completed_at = datetime.utcnow()
+
+            # Store receipt
+            receipt_id = f"RCP-{uuid.uuid4().hex[:12].upper()}"
+            db_receipt = PaymentReceipt(
+                id=receipt_id,
+                payment_mandate_id=request.mandate_id,
+                confirmation_id=receipt.get("payment_id", "UNKNOWN"),
+                amount=receipt["amount"]["value"],
+                currency=receipt["amount"]["currency"],
+                status="success",
+                receipt_data=json.dumps(receipt)
+            )
+
+            session.add(db_receipt)
+            await session.commit()
+
+            logger.info(f"Mastercard authentication verified, payment successful for checkout {db_mandate.checkout_session_id}")
+            return ConfirmCheckoutResponse(
+                status="success",
+                receipt=receipt,
+                message="Payment completed successfully!"
+            )
+        else:
+            # Authentication failed
+            auth_challenge.status = "declined"
+            auth_challenge.attempts += 1
+            await session.commit()
+
+            logger.warning(f"Mastercard authentication failed for challenge {request.challenge_id}")
+            return ConfirmCheckoutResponse(
+                status="failed",
+                message="Authentication verification failed"
+            )
+
+    except Exception as e:
+        logger.error(f"Mastercard authentication verification error: {e}")
+        return ConfirmCheckoutResponse(
+            status="failed",
+            message=f"Verification failed: {str(e)}"
         )
 
 

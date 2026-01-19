@@ -3,7 +3,7 @@
 from sqlalchemy import Column, String, Float, Integer, Text, DateTime, Boolean, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 
@@ -45,6 +45,13 @@ class PaymentCard(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+
+    # Mastercard Tokenization fields
+    mastercard_token = Column(String)  # Network token from Mastercard
+    mastercard_token_ref = Column(String)  # Token unique reference
+    mastercard_token_assurance = Column(String)  # Token assurance level
+    tokenization_date = Column(DateTime)  # When card was tokenized
+    is_tokenized = Column(Boolean, default=False)  # Whether card is tokenized
 
     # Relationships
     user = relationship("User", back_populates="payment_cards")
@@ -151,6 +158,37 @@ class PaymentReceipt(Base):
             "receipt_data": json.loads(self.receipt_data) if self.receipt_data else None,
             "error_message": self.error_message,
             "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class MastercardAuthenticationChallenge(Base):
+    """Track Mastercard authentication challenges during payment."""
+    __tablename__ = "mastercard_auth_challenges"
+
+    id = Column(String, primary_key=True)
+    payment_mandate_id = Column(String, ForeignKey("payment_mandates.id"), nullable=False)
+    challenge_id = Column(String, nullable=False)  # Mastercard challenge ID
+    transaction_id = Column(String, nullable=False)  # Transaction identifier
+    authentication_method = Column(String)  # "otp", "biometric", "none"
+    status = Column(String, default="pending")  # "pending", "approved", "declined", "expired"
+    verification_code = Column(String)  # Store OTP temporarily (hashed in production)
+    attempts = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    verified_at = Column(DateTime)
+    expires_at = Column(DateTime)
+    raw_response = Column(Text)  # JSON response from Mastercard API
+
+    def to_dict(self):
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "payment_mandate_id": self.payment_mandate_id,
+            "challenge_id": self.challenge_id,
+            "authentication_method": self.authentication_method,
+            "status": self.status,
+            "attempts": self.attempts,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "verified_at": self.verified_at.isoformat() if self.verified_at else None
         }
 
 
