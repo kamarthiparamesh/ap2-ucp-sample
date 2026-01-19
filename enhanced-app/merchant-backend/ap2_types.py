@@ -10,7 +10,7 @@ from datetime import datetime
 
 class PaymentCurrencyAmount(BaseModel):
     """Payment amount with currency."""
-    currency: str = "USD"
+    currency: str = "SGD"
     value: float
 
 

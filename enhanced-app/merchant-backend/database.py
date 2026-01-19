@@ -19,7 +19,7 @@ class Product(Base):
     name = Column(String, nullable=False)
     description = Column(Text)
     price = Column(Float, nullable=False)
-    currency = Column(String, default="USD")
+    currency = Column(String, default="SGD")
     category = Column(String)
     brand = Column(String)
     image_url = Column(Text)  # JSON array of image URLs
@@ -131,7 +131,7 @@ class PaymentMandate(Base):
     cart_id = Column(String, nullable=False)
     payment_card_id = Column(String, ForeignKey("payment_cards.id"), nullable=False)
     total_amount = Column(Float, nullable=False)
-    currency = Column(String, default="USD")
+    currency = Column(String, default="SGD")
     mandate_data = Column(Text)  # JSON: Full AP2 PaymentMandate structure
     user_signature = Column(Text)  # WebAuthn signature
     status = Column(String, default="pending")  # "pending", "signed", "processing", "completed", "failed"
@@ -171,7 +171,7 @@ class PaymentReceipt(Base):
     psp_confirmation_id = Column(String)  # Payment service provider confirmation
     network_confirmation_id = Column(String)  # Card network confirmation
     amount = Column(Float, nullable=False)
-    currency = Column(String, default="USD")
+    currency = Column(String, default="SGD")
     status = Column(String, nullable=False)  # "success", "error", "failure"
     receipt_data = Column(Text)  # JSON: Full AP2 PaymentReceipt structure
     error_message = Column(Text)  # Error details if status is "error" or "failure"

@@ -424,7 +424,7 @@ class MastercardAuthenticationClient:
         Args:
             token: Network token
             amount: Transaction amount
-            currency: Currency code (e.g., "USD")
+            currency: Currency code (e.g., "SGD")
             merchant_id: Merchant identifier
             transaction_id: Unique transaction ID
 

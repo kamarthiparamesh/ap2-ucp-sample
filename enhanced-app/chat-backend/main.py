@@ -314,7 +314,7 @@ async def create_checkout(
         "checkout_id": checkout_id,
         "items": [item.dict() for item in checkout_request.items],
         "total": total,
-        "currency": "USD",
+        "currency": "SGD",
         "status": "completed",
         "customer_name": checkout_request.customer_name,
         "customer_email": checkout_request.customer_email,
@@ -332,7 +332,7 @@ async def create_checkout(
         checkout_id=checkout_id,
         items=checkout_request.items,
         total=total,
-        currency="USD",
+        currency="SGD",
         status="completed",
         created_at=checkout_data["created_at"]
     )
@@ -738,7 +738,7 @@ async def prepare_checkout(
         cart_id=request.session_id,
         payment_card_id=card.id,
         total_amount=cart_info["total"],
-        currency="USD",
+        currency="SGD",
         mandate_data=json.dumps(mandate),
         checkout_session_id=checkout_session["id"],  # Store UCP session ID
         status="pending"

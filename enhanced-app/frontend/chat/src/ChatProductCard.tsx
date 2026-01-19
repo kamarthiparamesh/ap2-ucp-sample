@@ -57,7 +57,7 @@ export function ChatProductCard({ product, isInCart, onAddToCart }: ChatProductC
 
         {/* Price Badge */}
         <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm px-2 py-1 rounded-full shadow-md">
-          <span className="text-sm font-bold text-primary-600">${product.price.toFixed(2)}</span>
+          <span className="text-sm font-bold text-primary-600">S${product.price.toFixed(2)}</span>
         </div>
       </div>
 

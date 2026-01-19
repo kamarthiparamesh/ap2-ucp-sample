@@ -41,7 +41,7 @@ function ProductCard({ id, sku, title, description, price, imageUrl, isInCart, o
 
         {/* Price Badge */}
         <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg">
-          <span className="text-lg font-bold text-primary-600">${price.toFixed(2)}</span>
+          <span className="text-lg font-bold text-primary-600">S${price.toFixed(2)}</span>
         </div>
       </div>
 

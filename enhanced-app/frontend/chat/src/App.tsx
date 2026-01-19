@@ -170,11 +170,11 @@ function App() {
 
   const handlePaymentSuccess = (paymentId: string, total: number, items: any[]) => {
     // Create a detailed confirmation message
-    const itemsList = items.map(item => `• ${item.title} (x${item.quantity}) - $${(item.price * item.quantity).toFixed(2)}`).join('\n')
+    const itemsList = items.map(item => `• ${item.title} (x${item.quantity}) - S$${(item.price * item.quantity).toFixed(2)}`).join('\n')
 
     const confirmationMessage: Message = {
       id: Date.now().toString(),
-      content: `## 🎉 Payment Successful!\n\n**Order Confirmed**\n\nYour payment has been processed successfully!\n\n**Order Details:**\n${itemsList}\n\n**Total Amount:** $${total.toFixed(2)}\n\n**Payment ID:** ${paymentId}\n\nThank you for your purchase! Your order will be processed shortly.`,
+      content: `## 🎉 Payment Successful!\n\n**Order Confirmed**\n\nYour payment has been processed successfully!\n\n**Order Details:**\n${itemsList}\n\n**Total Amount:** S$${total.toFixed(2)}\n\n**Payment ID:** ${paymentId}\n\nThank you for your purchase! Your order will be processed shortly.`,
       role: 'assistant',
       timestamp: new Date()
     }

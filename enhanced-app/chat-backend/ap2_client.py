@@ -80,7 +80,7 @@ class AP2Client:
                 "payment_details_total": {
                     "label": "Total",
                     "amount": {
-                        "currency": "USD",
+                        "currency": "SGD",
                         "value": cart_data.get("total", 0.0)
                     }
                 },
@@ -125,7 +125,7 @@ class AP2Client:
                 json={
                     "line_items": cart_items,
                     "buyer_email": buyer_email,
-                    "currency": "USD"
+                    "currency": "SGD"
                 },
                 headers={"Content-Type": "application/json"}
             )

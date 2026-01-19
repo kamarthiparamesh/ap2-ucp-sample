@@ -215,7 +215,7 @@ function App() {
               <div>
                 <p className="text-sm text-gray-600 mb-1">Average Price</p>
                 <p className="text-3xl font-bold text-gray-800">
-                  ${products.length > 0
+                  S${products.length > 0
                     ? (products.reduce((sum, p) => sum + p.price, 0) / products.length).toFixed(2)
                     : '0.00'
                   }
@@ -334,9 +334,10 @@ function App() {
                     value={formData.currency}
                     onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
                   >
-                    <option value="USD">USD</option>
+                    <option value="SGD">SGD</option>
                     <option value="EUR">EUR</option>
                     <option value="GBP">GBP</option>
+                    <option value="USD">USD</option>
                   </select>
                 </div>
               </div>

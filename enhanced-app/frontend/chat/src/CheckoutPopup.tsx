@@ -376,7 +376,7 @@ function CheckoutPopup({ isOpen, onClose, sessionId, userEmail, onPaymentSuccess
                         <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                       </div>
                       <p className="text-sm font-medium text-gray-800 whitespace-nowrap">
-                        ${(item.price * item.quantity).toFixed(2)}
+                        S${(item.price * item.quantity).toFixed(2)}
                       </p>
                     </div>
                   ))}
@@ -384,7 +384,7 @@ function CheckoutPopup({ isOpen, onClose, sessionId, userEmail, onPaymentSuccess
                 <div className="border-t border-gray-200 mt-4 pt-4 flex justify-between items-center">
                   <p className="text-base font-bold text-gray-800">Total</p>
                   <p className="text-xl font-bold text-primary-600">
-                    ${checkoutData?.cart_total.toFixed(2)}
+                    S${checkoutData?.cart_total.toFixed(2)}
                   </p>
                 </div>
               </div>

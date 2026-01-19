@@ -160,7 +160,7 @@ function Dashboard({ onBackToProducts }: DashboardProps) {
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                <RefreshCw className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 S${autoRefresh ? 'animate-spin' : ''}`} />
                 <span>{autoRefresh ? 'Auto-refreshing' : 'Auto-refresh OFF'}</span>
               </button>
             </div>
@@ -246,7 +246,7 @@ function Dashboard({ onBackToProducts }: DashboardProps) {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4 flex-1">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(log.response_status)}`}>
+                          <span className={`px-2 py-1 rounded text-xs font-medium S${getStatusColor(log.response_status)}`}>
                             {log.response_status}
                           </span>
                           <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium">
@@ -330,7 +330,7 @@ function Dashboard({ onBackToProducts }: DashboardProps) {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4 flex-1">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(log.response_status)}`}>
+                          <span className={`px-2 py-1 rounded text-xs font-medium S${getStatusColor(log.response_status)}`}>
                             {log.response_status}
                           </span>
                           <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">

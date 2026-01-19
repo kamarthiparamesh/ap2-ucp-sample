@@ -41,7 +41,7 @@ class ProductCreate(BaseModel):
     name: str
     description: Optional[str] = None
     price: float
-    currency: str = "USD"
+    currency: str = "SGD"
     category: Optional[str] = None
     brand: Optional[str] = None
     image_url: Optional[List[str]] = None
@@ -742,7 +742,7 @@ class CheckoutSessionCreate(BaseModel):
     """Create checkout session request."""
     line_items: List[LineItem]
     buyer_email: str
-    currency: str = "USD"
+    currency: str = "SGD"
 
 class CheckoutSessionUpdate(BaseModel):
     """Update checkout session request."""

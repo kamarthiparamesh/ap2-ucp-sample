@@ -89,7 +89,7 @@ class UCPMerchantClient:
                     "name": item["title"],
                     "description": item.get("description"),
                     "price": item["price"] / 100.0,  # Convert cents to dollars
-                    "currency": "USD",
+                    "currency": "SGD",
                     "image_url": image_url
                 })
 
