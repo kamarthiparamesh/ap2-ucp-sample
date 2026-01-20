@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
-import { Send, ShoppingCart, Sparkles, Bot, User, UserPlus, Grid3x3, LogOut, Menu, X } from 'lucide-react'
+import { Send, ShoppingCart, Sparkles, Bot, User, UserPlus, Grid3x3, LogOut, Menu, X, Database } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import RegisterPage from './RegisterPage'
 import CheckoutPopup from './CheckoutPopup'
@@ -207,6 +207,50 @@ function App() {
     ])
   }
 
+  const handleResetDatabase = async () => {
+    if (!confirm('⚠️ WARNING: This will delete ALL user data, payment cards, and transactions from the database. This action cannot be undone. Are you sure you want to continue?')) {
+      return
+    }
+
+    try {
+      const response = await axios.post('/api/database/reset')
+
+      // Clear local user data
+      localStorage.removeItem('userEmail')
+      setUserEmail('')
+      setIsRegistered(false)
+      setCartItems(new Set())
+
+      // Add success message
+      const successMessage: Message = {
+        id: Date.now().toString(),
+        content: `✅ **Database Reset Complete**\n\n${response.data.message}\n\nYou can now register a new account to get started.`,
+        role: 'assistant',
+        timestamp: new Date()
+      }
+
+      // Reset messages with welcome message
+      setMessages([
+        {
+          id: '1',
+          content: "👋 Hello! I'm your AI Shopping Assistant powered by Ollama. I can help you find products, manage your cart, and complete your purchase. To use secure checkout with AP2 payment, please register first!",
+          role: 'assistant',
+          timestamp: new Date()
+        },
+        successMessage
+      ])
+    } catch (error) {
+      console.error('Error resetting database:', error)
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        content: "❌ Failed to reset database. Please try again or contact support.",
+        role: 'assistant',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
+    }
+  }
+
   const fetchProducts = async (query?: string) => {
     try {
       const params = query ? `?query=${encodeURIComponent(query)}` : ''
@@ -318,6 +362,14 @@ function App() {
                   <span>Logout</span>
                 </button>
               )}
+              <button
+                onClick={handleResetDatabase}
+                className="flex items-center space-x-2 text-orange-600 hover:text-orange-700 transition-colors font-medium"
+                title="Reset Database (Warning: Deletes all data)"
+              >
+                <Database className="w-5 h-5" />
+                <span>Reset DB</span>
+              </button>
               <a
                 href="https://app.abhinava.xyz"
                 target="_blank"
@@ -374,6 +426,17 @@ function App() {
                   <span>Logout</span>
                 </button>
               )}
+              <button
+                onClick={() => {
+                  handleResetDatabase()
+                  setMobileMenuOpen(false)
+                }}
+                className="w-full flex items-center space-x-2 px-4 py-3 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors font-medium"
+                title="Reset Database (Warning: Deletes all data)"
+              >
+                <Database className="w-5 h-5" />
+                <span>Reset Database</span>
+              </button>
               <a
                 href="https://app.abhinava.xyz"
                 target="_blank"

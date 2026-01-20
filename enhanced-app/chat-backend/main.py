@@ -1174,6 +1174,41 @@ async def verify_mastercard_authentication(
 
 
 # ============================================================================
+# Database Management Endpoints
+# ============================================================================
+
+@app.post("/api/database/reset")
+async def reset_database(session: AsyncSession = Depends(get_db)):
+    """
+    Reset all database tables - removes all users, cards, mandates, receipts, and auth challenges.
+    This is useful for testing and development.
+    """
+    try:
+        from sqlalchemy import delete
+
+        # Delete all records from tables (in correct order to respect foreign keys)
+        await session.execute(delete(PaymentReceipt))
+        await session.execute(delete(MastercardAuthenticationChallenge))
+        await session.execute(delete(PaymentMandate))
+        await session.execute(delete(PaymentCard))
+        await session.execute(delete(User))
+
+        await session.commit()
+
+        logger.info("Database reset successful - all tables cleared")
+
+        return {
+            "status": "success",
+            "message": "Database has been reset successfully. All users, cards, and transactions have been removed.",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"Database reset failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Database reset failed: {str(e)}")
+
+
+# ============================================================================
 # Health Check
 # ============================================================================
 
