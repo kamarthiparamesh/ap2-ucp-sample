@@ -20,6 +20,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 from merchant_payment_agent import MerchantPaymentAgent
+from loyalty_agent import LoyaltyAgent
 from ap2_types import PaymentMandate as AP2PaymentMandate, PaymentReceipt as AP2PaymentReceipt, OTPVerification, PaymentReceiptSuccess
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -32,6 +33,13 @@ from io import BytesIO
 load_dotenv()
 
 # Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
 
 
@@ -122,10 +130,17 @@ async def lifespan(app: FastAPI):
         model_name=ollama_model
     )
 
+    # Initialize Loyalty Agent (uses OLLAMA for A2A communication)
+    loyalty_model = os.getenv("LOYALTY_MODEL", "qwen2.5:8b")
+    app.state.loyalty_agent = LoyaltyAgent(
+        ollama_url=ollama_url,
+        model_name=loyalty_model
+    )
+
     yield
 
     # Shutdown (cleanup if needed)
-    pass
+    await app.state.loyalty_agent.cleanup()
 
 
 async def seed_initial_data():
@@ -450,7 +465,7 @@ async def root():
 async def get_ucp_profile(request: Request):
     """
     UCP Discovery Endpoint
-    Returns merchant capabilities and service endpoints
+    Returns merchant capabilities and service endpoints including A2A support
     """
     merchant_url = os.getenv("MERCHANT_URL", "http://localhost:8451")
 
@@ -464,6 +479,10 @@ async def get_ucp_profile(request: Request):
                     "rest": {
                         "schema": "https://ucp.dev/services/shopping/rest.openapi.json",
                         "endpoint": f"{merchant_url}/ucp/v1"
+                    },
+                    "a2a": {
+                        "agent_card": f"{merchant_url}/.well-known/ucp/agent-card",
+                        "transport": "a2a"
                     }
                 }
             },
@@ -482,7 +501,7 @@ async def get_ucp_profile(request: Request):
                     "extensions": {
                         "ap2_mandate": {
                             "version": "2026-01-11",
-                            "spec": "https://ucp.dev/specification/extensions/ap2_mandate",
+                            "spec": "https://ucp.dev/specification/ap2-mandates",
                             "schema": "https://ucp.dev/schemas/extensions/ap2_mandate.json"
                         },
                         "discount": {
@@ -493,6 +512,18 @@ async def get_ucp_profile(request: Request):
                             "supports_promocodes": True
                         }
                     }
+                }
+            ],
+            "extensions": [
+                "https://ucp.dev/specification/reference?v=2026-01-11",
+                {
+                    "namespace": "com.enhancedbusiness.loyalty",
+                    "version": "1.0.0",
+                    "name": "loyalty_rewards",
+                    "description": "Custom loyalty rewards program with A2A support",
+                    "capabilities": ["query", "redeem", "status"],
+                    "a2a_enabled": True,
+                    "endpoint": f"{merchant_url}/api/loyalty"
                 }
             ]
         },
@@ -1325,6 +1356,31 @@ async def complete_checkout_session(
             promo.usage_count += 1
             await session.commit()
 
+    # Award loyalty points for successful payment
+    if isinstance(receipt.payment_status, PaymentReceiptSuccess):
+        buyer_email = checkout_data.get("buyer_email")
+        payment_amount = receipt.amount.value
+        payment_id = receipt.payment_id
+
+        # Award points (1 point per dollar spent, multiplied by tier)
+        base_points = int(payment_amount)
+        loyalty_agent = app.state.loyalty_agent
+
+        # Get user's tier to apply multiplier
+        loyalty_status = loyalty_agent.get_loyalty_status(buyer_email)
+        multiplier = loyalty_status["tier_benefits"]["points_multiplier"]
+        total_points = int(base_points * multiplier)
+
+        # Award the points
+        loyalty_agent.award_loyalty_points(
+            user_email=buyer_email,
+            points=total_points,
+            transaction_id=payment_id,
+            description=f"Purchase reward (${payment_amount:.2f})"
+        )
+
+        logger.info(f"Awarded {total_points} loyalty points to {buyer_email} for payment {payment_id}")
+
     # Update checkout session with completion
     checkout_data["status"] = "complete"
     checkout_data["receipt"] = receipt.dict()
@@ -1507,6 +1563,264 @@ async def clear_all_logs(session: AsyncSession = Depends(get_db)):
 
 
 # ============================================================================
+# UCP Agent Card Endpoint (A2A)
+# ============================================================================
+
+@app.get("/.well-known/ucp/agent-card")
+async def get_agent_card():
+    """
+    UCP Agent Card endpoint for A2A discovery.
+    Returns merchant agent capabilities and extensions.
+    """
+    merchant_url = os.getenv("MERCHANT_URL", "http://localhost:8451")
+
+    return {
+        "agent": {
+            "name": "Enhanced Business Merchant Agent",
+            "version": "1.0.0",
+            "description": "AI-powered merchant agent with loyalty and payment capabilities"
+        },
+        "extensions": [
+            "https://ucp.dev/specification/reference?v=2026-01-11"
+        ],
+        "capabilities": {
+            "checkout": True,
+            "loyalty": True,
+            "custom_extensions": [
+                {
+                    "namespace": "com.enhancedbusiness.loyalty",
+                    "version": "1.0.0",
+                    "endpoints": {
+                        "query": f"{merchant_url}/api/loyalty/query",
+                        "status": f"{merchant_url}/api/loyalty/status",
+                        "redeem": f"{merchant_url}/api/loyalty/redeem"
+                    }
+                }
+            ]
+        },
+        "supported_protocols": ["rest", "a2a"],
+        "merchant_id": os.getenv("MERCHANT_ID", "merchant-001")
+    }
+
+
+# ============================================================================
+# Loyalty API Endpoints (Custom UCP Extension)
+# ============================================================================
+
+class LoyaltyQueryRequest(BaseModel):
+    """Request for loyalty inquiry via A2A."""
+    user_email: str
+    inquiry: str
+    context: Optional[Dict[str, Any]] = None
+
+
+class LoyaltyStatusRequest(BaseModel):
+    """Request for loyalty status."""
+    user_email: str
+
+
+class LoyaltyRedeemRequest(BaseModel):
+    """Request to redeem loyalty points."""
+    user_email: str
+    points: int
+    redemption_type: str = "discount"
+
+
+@app.post("/api/loyalty/query")
+async def query_loyalty(request: LoyaltyQueryRequest):
+    """
+    Process loyalty inquiry via A2A (consumer agent -> merchant agent).
+    Uses OLLAMA on merchant backend for intelligent responses.
+    """
+    loyalty_agent = app.state.loyalty_agent
+
+    try:
+        response = await loyalty_agent.process_loyalty_inquiry(
+            user_email=request.user_email,
+            inquiry=request.inquiry,
+            context=request.context
+        )
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Loyalty query error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process loyalty inquiry: {str(e)}")
+
+
+@app.post("/api/loyalty/status")
+async def get_loyalty_status_endpoint(request: LoyaltyStatusRequest):
+    """Get loyalty status for a user (A2A endpoint)."""
+    loyalty_agent = app.state.loyalty_agent
+
+    try:
+        status = loyalty_agent.get_loyalty_status(request.user_email)
+        return status
+
+    except Exception as e:
+        logger.error(f"Loyalty status error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get loyalty status: {str(e)}")
+
+
+@app.post("/api/loyalty/redeem")
+async def redeem_loyalty_endpoint(request: LoyaltyRedeemRequest):
+    """Redeem loyalty points (A2A endpoint)."""
+    loyalty_agent = app.state.loyalty_agent
+
+    try:
+        result = loyalty_agent.redeem_loyalty_points(
+            user_email=request.user_email,
+            points_to_redeem=request.points,
+            redemption_type=request.redemption_type
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Loyalty redemption error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to redeem loyalty points: {str(e)}")
+
+
+# Internal endpoint to award points (called after successful payment)
+@app.post("/api/loyalty/award")
+async def award_loyalty_points_endpoint(
+    user_email: str,
+    points: int,
+    transaction_id: str,
+    description: str = "Purchase reward"
+):
+    """Award loyalty points to user (internal endpoint)."""
+    loyalty_agent = app.state.loyalty_agent
+
+    try:
+        result = loyalty_agent.award_loyalty_points(
+            user_email=user_email,
+            points=points,
+            transaction_id=transaction_id,
+            description=description
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Loyalty award error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to award loyalty points: {str(e)}")
+
+
+# ============================================================================
+# Merchant Portal - Loyalty Management Endpoints
+# ============================================================================
+
+@app.get("/api/loyalty/users")
+async def list_loyalty_users(skip: int = 0, limit: int = 100):
+    """
+    List all loyalty program users.
+    Merchant portal endpoint for viewing loyalty members.
+    """
+    loyalty_agent = app.state.loyalty_agent
+
+    # Get all users with their loyalty data
+    users_list = []
+    for email in list(loyalty_agent.user_loyalty_points.keys()):
+        status = loyalty_agent.get_loyalty_status(email)
+        users_list.append(status)
+
+    # Apply pagination
+    paginated_users = users_list[skip:skip + limit]
+
+    return {
+        "users": paginated_users,
+        "total": len(users_list),
+        "skip": skip,
+        "limit": limit
+    }
+
+
+@app.get("/api/loyalty/user/{user_email}")
+async def get_loyalty_user_detail(user_email: str):
+    """Get detailed loyalty information for a specific user."""
+    loyalty_agent = app.state.loyalty_agent
+
+    try:
+        status = loyalty_agent.get_loyalty_status(user_email)
+        history = loyalty_agent.loyalty_history.get(user_email, [])
+
+        return {
+            "status": status,
+            "history": history
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get loyalty user details: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get user details: {str(e)}")
+
+
+class ManualPointsAdjustment(BaseModel):
+    """Model for manual points adjustment."""
+    user_email: str
+    points: int
+    description: str
+    adjustment_type: str = "manual"  # manual, bonus, correction
+
+
+@app.post("/api/loyalty/adjust-points")
+async def adjust_points_manually(adjustment: ManualPointsAdjustment):
+    """
+    Manually adjust loyalty points for a user.
+    Merchant portal endpoint for customer service.
+    """
+    loyalty_agent = app.state.loyalty_agent
+
+    try:
+        transaction_id = f"ADJ-{uuid.uuid4().hex[:8].upper()}"
+
+        result = loyalty_agent.award_loyalty_points(
+            user_email=adjustment.user_email,
+            points=adjustment.points,  # Can be negative for deductions
+            transaction_id=transaction_id,
+            description=f"{adjustment.adjustment_type.upper()}: {adjustment.description}"
+        )
+
+        logger.info(f"Manual points adjustment: {adjustment.points} points for {adjustment.user_email}")
+
+        return {
+            "success": True,
+            "adjustment_id": transaction_id,
+            "loyalty_status": result
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to adjust points: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to adjust points: {str(e)}")
+
+
+@app.get("/api/loyalty/stats")
+async def get_loyalty_stats():
+    """Get overall loyalty program statistics for merchant dashboard."""
+    loyalty_agent = app.state.loyalty_agent
+
+    total_members = len(loyalty_agent.user_loyalty_points)
+    total_points_distributed = sum(loyalty_agent.user_loyalty_points.values())
+
+    # Count members by tier
+    tier_breakdown = {}
+    for tier in ["bronze", "silver", "gold", "platinum"]:
+        count = sum(1 for t in loyalty_agent.loyalty_tiers.values() if t == tier)
+        tier_breakdown[tier] = count
+
+    # Count total transactions
+    total_transactions = sum(len(history) for history in loyalty_agent.loyalty_history.values())
+
+    return {
+        "total_members": total_members,
+        "total_points_distributed": total_points_distributed,
+        "tier_breakdown": tier_breakdown,
+        "total_transactions": total_transactions,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+# ============================================================================
 # Health Check
 # ============================================================================
 
@@ -1525,7 +1839,7 @@ async def health_check():
 # ============================================================================
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8451))
+    port = int(os.getenv("PORT", 8453))
     host = os.getenv("HOST", "0.0.0.0")
 
     uvicorn.run(

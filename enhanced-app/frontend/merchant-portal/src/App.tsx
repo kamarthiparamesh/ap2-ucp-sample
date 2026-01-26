@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Plus, Edit2, Trash2, Save, X, Store, MessageSquare, DollarSign, BarChart3, Tag, Package, Settings as SettingsIcon, Menu } from 'lucide-react'
+import { Plus, Edit2, Trash2, Save, X, Store, MessageSquare, DollarSign, BarChart3, Tag, Package, Settings as SettingsIcon, Menu, Users } from 'lucide-react'
 import Dashboard from './Dashboard'
 import Promocodes from './Promocodes'
 import Settings from './Settings'
+import Loyalty from './Loyalty'
 
 interface Product {
   id: string
@@ -34,7 +35,7 @@ interface ProductFormData {
 }
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<'products' | 'promocodes' | 'dashboard' | 'settings'>('products')
+  const [currentPage, setCurrentPage] = useState<'products' | 'promocodes' | 'dashboard' | 'settings' | 'loyalty'>('products')
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -150,6 +151,8 @@ function App() {
         return <Promocodes onBackToProducts={() => setCurrentPage('products')} />
       case 'settings':
         return <Settings onBackToProducts={() => setCurrentPage('products')} />
+      case 'loyalty':
+        return <Loyalty onBackToProducts={() => setCurrentPage('products')} />
       case 'products':
         return renderProductsPage()
     }
@@ -190,6 +193,15 @@ function App() {
               >
                 <Tag className="w-5 h-5" />
                 <span>Promocodes</span>
+              </button>
+              <button
+                onClick={() => setCurrentPage('loyalty')}
+                className={`flex items-center space-x-2 transition-colors font-medium ${
+                  currentPage === 'loyalty' ? 'text-primary-700' : 'text-primary-600 hover:text-primary-700'
+                }`}
+              >
+                <Users className="w-5 h-5" />
+                <span>Loyalty</span>
               </button>
               <button
                 onClick={() => setCurrentPage('dashboard')}
@@ -259,6 +271,20 @@ function App() {
               >
                 <Tag className="w-5 h-5" />
                 <span>Promocodes</span>
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentPage('loyalty')
+                  setMobileMenuOpen(false)
+                }}
+                className={`w-full flex items-center space-x-2 px-4 py-3 rounded-lg transition-colors font-medium ${
+                  currentPage === 'loyalty'
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-primary-600 hover:bg-gray-50'
+                }`}
+              >
+                <Users className="w-5 h-5" />
+                <span>Loyalty</span>
               </button>
               <button
                 onClick={() => {

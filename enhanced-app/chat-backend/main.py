@@ -29,6 +29,7 @@ from payment_utils import (
 )
 from ap2_client import AP2Client
 from mastercard_client import MastercardClient
+from loyalty_client import LoyaltyClient
 
 # Load environment variables
 load_dotenv()
@@ -169,6 +170,10 @@ async def lifespan(app: FastAPI):
     app.state.ap2_client = AP2Client(merchant_url)
     logger.info("AP2 client initialized")
 
+    # Initialize Loyalty client (for A2A loyalty communication)
+    app.state.loyalty_client = LoyaltyClient(merchant_url)
+    logger.info("Loyalty client initialized")
+
     # Initialize Mastercard client (for tokenization and authentication)
     app.state.mastercard_client = MastercardClient(sandbox=True)
     if app.state.mastercard_client.enabled:
@@ -181,6 +186,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     await app.state.agent.cleanup()
     await app.state.ap2_client.cleanup()
+    await app.state.loyalty_client.cleanup()
     if app.state.mastercard_client.enabled:
         await app.state.mastercard_client.cleanup()
     logger.info("Chat backend shutdown complete")
@@ -1171,6 +1177,86 @@ async def verify_mastercard_authentication(
             status="failed",
             message=f"Verification failed: {str(e)}"
         )
+
+
+# ============================================================================
+# Loyalty Endpoints (Consumer Agent - communicates with Merchant via UCP A2A)
+# ============================================================================
+
+def get_loyalty_client() -> LoyaltyClient:
+    """Get loyalty client instance."""
+    return app.state.loyalty_client
+
+
+class LoyaltyInquiryRequest(BaseModel):
+    """Request to query loyalty via A2A."""
+    user_email: str
+    inquiry: str
+
+
+@app.post("/api/loyalty/query")
+async def query_loyalty_via_a2a(
+    request: LoyaltyInquiryRequest,
+    agent: EnhancedBusinessAgent = Depends(get_agent),
+    loyalty_client: LoyaltyClient = Depends(get_loyalty_client)
+):
+    """
+    Query loyalty program via A2A (chat backend -> merchant backend).
+    Consumer agent sends inquiry to merchant agent.
+    """
+    try:
+        # Get cart context if available
+        cart_info = agent.get_cart("default")  # Use default session for now
+
+        # Send inquiry to merchant's loyalty agent via A2A
+        response = await loyalty_client.query_loyalty(
+            user_email=request.user_email,
+            inquiry=request.inquiry,
+            context={"cart": cart_info} if cart_info else None
+        )
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Loyalty query error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to query loyalty: {str(e)}")
+
+
+@app.get("/api/loyalty/status")
+async def get_user_loyalty_status(
+    user_email: str,
+    loyalty_client: LoyaltyClient = Depends(get_loyalty_client)
+):
+    """Get loyalty status for a user via A2A."""
+    try:
+        status = await loyalty_client.get_loyalty_status(user_email)
+        return status
+
+    except Exception as e:
+        logger.error(f"Loyalty status error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get loyalty status: {str(e)}")
+
+
+@app.post("/api/loyalty/redeem")
+async def redeem_points(
+    user_email: str,
+    points: int,
+    redemption_type: str = "discount",
+    loyalty_client: LoyaltyClient = Depends(get_loyalty_client)
+):
+    """Redeem loyalty points via A2A."""
+    try:
+        result = await loyalty_client.redeem_loyalty_points(
+            user_email=user_email,
+            points=points,
+            redemption_type=redemption_type
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Loyalty redemption error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to redeem points: {str(e)}")
 
 
 # ============================================================================

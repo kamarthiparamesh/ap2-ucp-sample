@@ -6,6 +6,9 @@ set -e  # Exit on error
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENHANCED_APP_DIR="$SCRIPT_DIR/enhanced-app"
 
+# Set LD_LIBRARY_PATH to find libsqlite3
+export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+
 echo "Starting UCP Sample Services..."
 
 # Function to check if a port is in use
@@ -43,7 +46,7 @@ cd "$ENHANCED_APP_DIR/frontend/chat"
 if [ $(check_port 8450) == "1" ]; then
     echo "  ⚠ Port 8450 already in use, skipping..."
 else
-    nohup npm run dev > chat-frontend.log 2>&1 &
+    nohup ./node_modules/.bin/vite > chat-frontend.log 2>&1 &
     echo "  ✓ Chat frontend started (PID: $!)"
 fi
 
@@ -53,7 +56,7 @@ cd "$ENHANCED_APP_DIR/frontend/merchant-portal"
 if [ $(check_port 8451) == "1" ]; then
     echo "  ⚠ Port 8451 already in use, skipping..."
 else
-    nohup npm run dev > merchant-portal.log 2>&1 &
+    nohup ./node_modules/.bin/vite > merchant-portal.log 2>&1 &
     echo "  ✓ Merchant portal started (PID: $!)"
 fi
 

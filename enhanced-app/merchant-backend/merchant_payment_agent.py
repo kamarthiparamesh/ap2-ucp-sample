@@ -49,6 +49,51 @@ class MerchantPaymentAgent:
 
         logger.info(f"Merchant Payment Agent initialized (model: {model_name}, OTP: {'enabled' if self.otp_enabled else 'disabled'})")
 
+    def validate_token_expiry(self, mandate: PaymentMandate) -> bool:
+        """
+        Validate payment token expiry (UCP compliance).
+        Checks if the network token has not expired.
+        Expects token_expiry in MM/YY format (e.g., "12/28").
+
+        Args:
+            mandate: Payment mandate with token details
+
+        Returns:
+            True if token is valid (not expired), False otherwise
+        """
+        # Extract token expiry from payment response details
+        token_expiry_str = mandate.payment_mandate_contents.payment_response.details.get("token_expiry")
+
+        if not token_expiry_str:
+            logger.warning(f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} missing token_expiry")
+            # For backward compatibility, accept mandates without expiry
+            return True
+
+        try:
+            # Parse expiry in MM/YY format
+            month_str, year_str = token_expiry_str.split("/")
+            month = int(month_str)
+            year = 2000 + int(year_str)  # Convert YY to YYYY
+
+            # Create expiry date (last day of the expiry month)
+            import calendar
+            last_day = calendar.monthrange(year, month)[1]
+            expiry_date = datetime(year, month, last_day, 23, 59, 59)
+
+            # Check if token has expired
+            now = datetime.utcnow()
+            if now > expiry_date:
+                logger.warning(f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} network token expired at {token_expiry_str}")
+                return False
+
+            logger.info(f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} network token valid until {token_expiry_str}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to parse network token expiry for mandate {mandate.payment_mandate_contents.payment_mandate_id}: {e}")
+            # For backward compatibility, accept if parsing fails
+            return True
+
     def validate_mandate_signature(self, mandate: PaymentMandate) -> bool:
         """
         Validate payment mandate signature.
@@ -136,8 +181,9 @@ class MerchantPaymentAgent:
 
         This is the main AP2 payment processing flow:
         1. Validate mandate signature
-        2. Process payment (simulate)
-        3. Return receipt
+        2. Validate token expiry (UCP compliance)
+        3. Process payment (simulate)
+        4. Return receipt
         """
         mandate_id = mandate.payment_mandate_contents.payment_mandate_id
 
@@ -150,6 +196,18 @@ class MerchantPaymentAgent:
                 amount=mandate.payment_mandate_contents.payment_details_total.amount,
                 payment_status=PaymentReceiptError(
                     error_message="Invalid mandate signature"
+                )
+            )
+
+        # Validate token expiry (UCP compliance)
+        if not self.validate_token_expiry(mandate):
+            return PaymentReceipt(
+                payment_mandate_id=mandate_id,
+                timestamp=datetime.utcnow().isoformat(),
+                payment_id=f"ERR-{uuid.uuid4().hex[:8]}",
+                amount=mandate.payment_mandate_contents.payment_details_total.amount,
+                payment_status=PaymentReceiptError(
+                    error_message="Payment token expired. Please retry the transaction."
                 )
             )
 

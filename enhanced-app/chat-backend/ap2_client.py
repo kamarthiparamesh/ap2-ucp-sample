@@ -49,6 +49,21 @@ class AP2Client:
         """
         return uuid.uuid4().hex.upper()
 
+    def _generate_network_token_expiry(self, years_valid: int = 3) -> str:
+        """
+        Generate network token expiry in MM/YY format.
+        UCP compliance: payment tokens should include network token expiry.
+
+        Args:
+            years_valid: Token validity in years (default: 3)
+
+        Returns:
+            Token expiry in MM/YY format (e.g., "12/28")
+        """
+        from datetime import timedelta
+        expiry_date = datetime.utcnow() + timedelta(days=365 * years_valid)
+        return expiry_date.strftime("%m/%y")
+
     def create_payment_mandate(
         self,
         cart_data: Dict[str, Any],
@@ -71,6 +86,10 @@ class AP2Client:
         mandate_id = f"PM-{uuid.uuid4().hex[:16].upper()}"
         payment_request_id = f"REQ-{uuid.uuid4().hex[:12].upper()}"
 
+        # Generate payment token with network token expiry (UCP compliance)
+        payment_token = self._generate_token_number()
+        token_expiry = self._generate_network_token_expiry(years_valid=3)  # 3 years validity
+
         # Create payment mandate structure following AP2 protocol
         mandate = {
             "payment_mandate_contents": {
@@ -88,7 +107,8 @@ class AP2Client:
                     "request_id": payment_request_id,
                     "method_name": "CARD",
                     "details": {
-                        "token": self._generate_token_number(),
+                        "token": payment_token,
+                        "token_expiry": token_expiry,  # UCP compliance: network token expiry in MM/YY format
                         "cryptogram": self._generate_cryptogram(),
                         "card_last_four": payment_card.get("card_last_four"),
                         "card_network": payment_card.get("card_network")
@@ -101,7 +121,7 @@ class AP2Client:
             "user_authorization": user_signature  # Will be added when user signs
         }
 
-        logger.info(f"Created payment mandate: {mandate_id}")
+        logger.info(f"Created payment mandate: {mandate_id} with network token expiry: {token_expiry}")
         return mandate
 
     async def create_checkout_session(
