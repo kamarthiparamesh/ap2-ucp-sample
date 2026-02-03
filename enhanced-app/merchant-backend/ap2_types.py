@@ -54,6 +54,8 @@ class PaymentMandate(BaseModel):
     """
     payment_mandate_contents: PaymentMandateContents
     user_authorization: Optional[str] = None  # Passkey signature
+    # Merchant verifiable credential
+    merchant_authorization: Optional[str] = None
 
 
 class PaymentReceiptSuccess(BaseModel):

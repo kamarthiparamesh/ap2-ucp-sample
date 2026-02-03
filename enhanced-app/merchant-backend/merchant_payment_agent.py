@@ -29,25 +29,30 @@ class MerchantPaymentAgent:
     Receives signed payment mandates from consumer and processes payments.
     """
 
-    def __init__(self, ollama_url: Optional[str] = None, model_name: str = "qwen2.5:8b"):
+    def __init__(self, ollama_url: Optional[str] = None, model_name: str = "qwen2.5:8b", signer_client=None):
         """
         Initialize merchant payment agent.
 
         Args:
             ollama_url: URL of Ollama server (optional, can use same as chat backend)
             model_name: Ollama model to use for payment processing logic
+            signer_client: SignerClient instance for credential verification
         """
         self.ollama_url = ollama_url
+        self.signer_client = signer_client
         self.model_name = model_name
         self.pending_otps: Dict[str, str] = {}  # mandate_id -> otp
 
         # OTP configuration - can be enabled/disabled via environment variable
         # Set ENABLE_OTP_CHALLENGE=true to enable OTP for high-risk transactions
         # Default: false (disabled) since passkeys provide sufficient security
-        self.otp_enabled = os.getenv("ENABLE_OTP_CHALLENGE", "false").lower() == "true"
-        self.otp_amount_threshold = float(os.getenv("OTP_AMOUNT_THRESHOLD", "100.0"))
+        self.otp_enabled = os.getenv(
+            "ENABLE_OTP_CHALLENGE", "false").lower() == "true"
+        self.otp_amount_threshold = float(
+            os.getenv("OTP_AMOUNT_THRESHOLD", "100.0"))
 
-        logger.info(f"Merchant Payment Agent initialized (model: {model_name}, OTP: {'enabled' if self.otp_enabled else 'disabled'})")
+        logger.info(
+            f"Merchant Payment Agent initialized (model: {model_name}, OTP: {'enabled' if self.otp_enabled else 'disabled'})")
 
     def validate_token_expiry(self, mandate: PaymentMandate) -> bool:
         """
@@ -62,10 +67,12 @@ class MerchantPaymentAgent:
             True if token is valid (not expired), False otherwise
         """
         # Extract token expiry from payment response details
-        token_expiry_str = mandate.payment_mandate_contents.payment_response.details.get("token_expiry")
+        token_expiry_str = mandate.payment_mandate_contents.payment_response.details.get(
+            "token_expiry")
 
         if not token_expiry_str:
-            logger.warning(f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} missing token_expiry")
+            logger.warning(
+                f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} missing token_expiry")
             # For backward compatibility, accept mandates without expiry
             return True
 
@@ -83,14 +90,17 @@ class MerchantPaymentAgent:
             # Check if token has expired
             now = datetime.utcnow()
             if now > expiry_date:
-                logger.warning(f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} network token expired at {token_expiry_str}")
+                logger.warning(
+                    f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} network token expired at {token_expiry_str}")
                 return False
 
-            logger.info(f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} network token valid until {token_expiry_str}")
+            logger.info(
+                f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} network token valid until {token_expiry_str}")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to parse network token expiry for mandate {mandate.payment_mandate_contents.payment_mandate_id}: {e}")
+            logger.error(
+                f"Failed to parse network token expiry for mandate {mandate.payment_mandate_contents.payment_mandate_id}: {e}")
             # For backward compatibility, accept if parsing fails
             return True
 
@@ -101,17 +111,59 @@ class MerchantPaymentAgent:
         For demo, we check if signature exists.
         """
         if not mandate.user_authorization:
-            logger.warning(f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} missing signature")
+            logger.warning(
+                f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} missing signature")
             return False
 
         # In production: verify signature using public key from consumer
         # For demo: accept if signature exists and is non-empty
         if len(mandate.user_authorization) < 10:
-            logger.warning(f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} has invalid signature")
+            logger.warning(
+                f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} has invalid signature")
             return False
 
-        logger.info(f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} signature validated")
+        logger.info(
+            f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} signature validated")
         return True
+
+    async def validate_merchant_authorization(self, mandate: PaymentMandate) -> bool:
+        """
+        Validate merchant authorization credential.
+        This verifies the merchant's verifiable credential signature.
+        """
+        if not mandate.merchant_authorization:
+            logger.warning(
+                f"Mandate {mandate.payment_mandate_contents.payment_mandate_id} missing merchant authorization")
+            return False
+
+        if not self.signer_client:
+            logger.error(
+                "Signer client not initialized - cannot verify merchant authorization")
+            return False
+
+        try:
+            logger.info(
+                f"Verifying merchant authorization for mandate {mandate.payment_mandate_contents.payment_mandate_id}")
+            verification_result = await self.signer_client.verify_credential(
+                jwt_vc=mandate.merchant_authorization
+            )
+
+            if not verification_result.get("valid") or not verification_result.get("verified"):
+                error_msg = verification_result.get(
+                    "error", "Unknown verification error")
+                logger.error(
+                    f"Merchant authorization verification failed: {error_msg}")
+                return False
+
+            logger.info(
+                f"Merchant authorization verified successfully for mandate {mandate.payment_mandate_contents.payment_mandate_id}")
+
+            return verification_result.get("valid")
+
+        except Exception as e:
+            logger.error(
+                f"Error verifying merchant authorization: {e}", exc_info=True)
+            return False
 
     def should_raise_otp_challenge(self, mandate: PaymentMandate) -> bool:
         """
@@ -134,17 +186,20 @@ class MerchantPaymentAgent:
         """
         # Check if OTP is enabled
         if not self.otp_enabled:
-            logger.info(f"OTP disabled for mandate {mandate.payment_mandate_contents.payment_mandate_id}")
+            logger.info(
+                f"OTP disabled for mandate {mandate.payment_mandate_contents.payment_mandate_id}")
             return False
 
         # OTP enabled - check amount threshold
         amount = mandate.payment_mandate_contents.payment_details_total.amount.value
 
         if amount > self.otp_amount_threshold:
-            logger.info(f"OTP challenge triggered for mandate {mandate.payment_mandate_contents.payment_mandate_id} (amount: ${amount} > threshold: ${self.otp_amount_threshold})")
+            logger.info(
+                f"OTP challenge triggered for mandate {mandate.payment_mandate_contents.payment_mandate_id} (amount: ${amount} > threshold: ${self.otp_amount_threshold})")
             return True
 
-        logger.info(f"No OTP challenge for mandate {mandate.payment_mandate_contents.payment_mandate_id} (amount: ${amount} <= threshold: ${self.otp_amount_threshold})")
+        logger.info(
+            f"No OTP challenge for mandate {mandate.payment_mandate_contents.payment_mandate_id} (amount: ${amount} <= threshold: ${self.otp_amount_threshold})")
         return False
 
     def generate_otp(self, mandate_id: str) -> str:
@@ -155,7 +210,8 @@ class MerchantPaymentAgent:
         """
         otp = '123456'  # Fixed OTP for demo purposes
         self.pending_otps[mandate_id] = otp
-        logger.info(f"Generated OTP for mandate {mandate_id}: {otp} (demo mode)")
+        logger.info(
+            f"Generated OTP for mandate {mandate_id}: {otp} (demo mode)")
         return otp
 
     def verify_otp(self, mandate_id: str, otp_code: str) -> bool:
@@ -175,15 +231,16 @@ class MerchantPaymentAgent:
         logger.warning(f"Invalid OTP for mandate {mandate_id}")
         return False
 
-    def process_payment(self, mandate: PaymentMandate) -> PaymentReceipt:
+    async def process_payment(self, mandate: PaymentMandate) -> PaymentReceipt:
         """
         Process payment mandate and return receipt.
 
         This is the main AP2 payment processing flow:
         1. Validate mandate signature
-        2. Validate token expiry (UCP compliance)
-        3. Process payment (simulate)
-        4. Return receipt
+        2. Validate merchant authorization credential
+        3. Validate token expiry (UCP compliance)
+        4. Process payment (simulate)
+        5. Return receipt
         """
         mandate_id = mandate.payment_mandate_contents.payment_mandate_id
 
@@ -198,6 +255,33 @@ class MerchantPaymentAgent:
                     error_message="Invalid mandate signature"
                 )
             )
+
+        # Validate merchant authorization credential
+        if mandate.merchant_authorization:
+            try:
+                is_valid = await self.validate_merchant_authorization(mandate)
+                if not is_valid:
+                    return PaymentReceipt(
+                        payment_mandate_id=mandate_id,
+                        timestamp=datetime.utcnow().isoformat(),
+                        payment_id=f"ERR-{uuid.uuid4().hex[:8]}",
+                        amount=mandate.payment_mandate_contents.payment_details_total.amount,
+                        payment_status=PaymentReceiptError(
+                            error_message="Invalid merchant authorization credential"
+                        )
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Error in merchant authorization validation: {e}")
+                return PaymentReceipt(
+                    payment_mandate_id=mandate_id,
+                    timestamp=datetime.utcnow().isoformat(),
+                    payment_id=f"ERR-{uuid.uuid4().hex[:8]}",
+                    amount=mandate.payment_mandate_contents.payment_details_total.amount,
+                    payment_status=PaymentReceiptError(
+                        error_message=f"Merchant authorization verification error: {str(e)}"
+                    )
+                )
 
         # Validate token expiry (UCP compliance)
         if not self.validate_token_expiry(mandate):
@@ -218,7 +302,8 @@ class MerchantPaymentAgent:
         psp_confirmation = f"PSP-{uuid.uuid4().hex[:8].upper()}"
         network_confirmation = f"NET-{uuid.uuid4().hex[:8].upper()}"
 
-        logger.info(f"Processing payment for mandate {mandate_id}: {payment_id}")
+        logger.info(
+            f"Processing payment for mandate {mandate_id}: {payment_id}")
 
         # Simulate success (95% success rate)
         if random.random() < 0.95:

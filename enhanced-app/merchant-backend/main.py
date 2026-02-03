@@ -12,7 +12,8 @@ import uvicorn
 import json
 import os
 import logging
-from datetime import datetime
+import hashlib
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 from database import db_manager, Product, UCPRequestLog, AP2RequestLog, Promocode
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 from merchant_payment_agent import MerchantPaymentAgent
 from loyalty_agent import LoyaltyAgent
+from signer_client import SignerClient
 from ap2_types import PaymentMandate as AP2PaymentMandate, PaymentReceipt as AP2PaymentReceipt, OTPVerification, PaymentReceiptSuccess
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -122,12 +124,18 @@ async def lifespan(app: FastAPI):
     # Seed database with sample products and promocodes if empty
     await seed_initial_data()
 
-    # Initialize AP2 Merchant Payment Agent
+    # Initialize Signer Client first for DID:web wallet and JWT signing
+    signer_url = os.getenv("SIGNER_URL", "http://localhost:8454")
+    app.state.signer_client = SignerClient(signer_url=signer_url)
+    logger.info(f"Signer Client initialized: {signer_url}")
+
+    # Initialize AP2 Merchant Payment Agent with signer client
     ollama_url = os.getenv("OLLAMA_URL", "http://192.168.86.41:11434")
     ollama_model = os.getenv("AP2_MERCHANT_MODEL", "qwen2.5:8b")
     app.state.payment_agent = MerchantPaymentAgent(
         ollama_url=ollama_url,
-        model_name=ollama_model
+        model_name=ollama_model,
+        signer_client=app.state.signer_client
     )
 
     # Initialize Loyalty Agent (uses OLLAMA for A2A communication)
@@ -137,10 +145,23 @@ async def lifespan(app: FastAPI):
         model_name=loyalty_model
     )
 
+    # Initialize wallet for this merchant domain and store DID document
+    merchant_domain = os.getenv("MERCHANT_DOMAIN", "localhost:8453")
+    app.state.did_document = None
+    try:
+        wallet_info = await app.state.signer_client.generate_did_web(merchant_domain)
+        app.state.did_document = wallet_info['did_document']
+        logger.info(f"Merchant wallet initialized: {wallet_info['did']}")
+        logger.info(f"DID document stored for domain: {merchant_domain}")
+    except Exception as e:
+        logger.warning(
+            f"Failed to initialize merchant wallet: {e}. Signing will be unavailable.")
+
     yield
 
     # Shutdown (cleanup if needed)
     await app.state.loyalty_agent.cleanup()
+    await app.state.signer_client.cleanup()
 
 
 async def seed_initial_data():
@@ -160,7 +181,8 @@ async def seed_initial_data():
                     price=4.99,
                     category="Bakery/Cookies",
                     brand="HomeBaked",
-                    image_url=json.dumps(["https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=400&h=400&fit=crop&q=80"]),
+                    image_url=json.dumps(
+                        ["https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=400&h=400&fit=crop&q=80"]),
                 ),
                 Product(
                     id="PROD-002",
@@ -170,7 +192,8 @@ async def seed_initial_data():
                     price=4.49,
                     category="Produce/Fruits",
                     brand="FarmFresh",
-                    image_url=json.dumps(["https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=400&h=400&fit=crop&q=80"]),
+                    image_url=json.dumps(
+                        ["https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=400&h=400&fit=crop&q=80"]),
                 ),
                 Product(
                     id="PROD-003",
@@ -180,7 +203,8 @@ async def seed_initial_data():
                     price=3.79,
                     category="Snacks/Chips",
                     brand="CrunchTime",
-                    image_url=json.dumps(["https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400&h=400&fit=crop&q=80"]),
+                    image_url=json.dumps(
+                        ["https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400&h=400&fit=crop&q=80"]),
                 ),
                 Product(
                     id="PROD-004",
@@ -190,7 +214,8 @@ async def seed_initial_data():
                     price=4.79,
                     category="Snacks/Chips",
                     brand="HealthyChoice",
-                    image_url=json.dumps(["https://images.unsplash.com/photo-1626200655629-cbee9dc8f42e?w=400&h=400&fit=crop&q=80"]),
+                    image_url=json.dumps(
+                        ["https://images.unsplash.com/photo-1626200655629-cbee9dc8f42e?w=400&h=400&fit=crop&q=80"]),
                 ),
                 Product(
                     id="PROD-005",
@@ -200,7 +225,8 @@ async def seed_initial_data():
                     price=5.99,
                     category="Bakery/Cookies",
                     brand="HomeBaked",
-                    image_url=json.dumps(["https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=400&h=400&fit=crop&q=80"]),
+                    image_url=json.dumps(
+                        ["https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=400&h=400&fit=crop&q=80"]),
                 ),
                 Product(
                     id="PROD-006",
@@ -210,7 +236,8 @@ async def seed_initial_data():
                     price=2.99,
                     category="Snacks/Bars",
                     brand="EnergyPlus",
-                    image_url=json.dumps(["https://images.unsplash.com/photo-1604480133435-25b9560f4294?w=400&h=400&fit=crop&q=80"]),
+                    image_url=json.dumps(
+                        ["https://images.unsplash.com/photo-1604480133435-25b9560f4294?w=400&h=400&fit=crop&q=80"]),
                 ),
             ]
 
@@ -261,6 +288,16 @@ async def seed_initial_data():
                     valid_from=now,
                     valid_until=now + timedelta(days=7)
                 ),
+                Promocode(
+                    id="PROMO-TEST-001",
+                    code="TESTFAIL",
+                    description="Test promocode - triggers invalid signature for testing",
+                    discount_type="percentage",
+                    discount_value=5.0,
+                    currency="SGD",
+                    valid_from=now,
+                    valid_until=now + timedelta(days=365)
+                ),
             ]
 
             session.add_all(sample_promocodes)
@@ -298,7 +335,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
 
-        # Capture request body
+        # Capture request body - use receive() to preserve stream
         request_body = None
         if request.method in ["POST", "PUT", "PATCH"]:
             body = await request.body()
@@ -307,6 +344,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     request_body = json.loads(body.decode())
                 except:
                     request_body = body.decode()
+
+            # CRITICAL: Re-create request with preserved body
+            async def receive():
+                return {"type": "http.request", "body": body}
+            request._receive = receive
 
         # Process request
         response = await call_next(request)
@@ -348,10 +390,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     id=str(uuid.uuid4()),
                     endpoint=request.url.path,
                     method=request.method,
-                    query_params=json.dumps(dict(request.query_params)) if request.query_params else None,
-                    request_body=json.dumps(request_body) if request_body else None,
+                    query_params=json.dumps(
+                        dict(request.query_params)) if request.query_params else None,
+                    request_body=json.dumps(
+                        request_body) if request_body else None,
                     response_status=response.status_code,
-                    response_body=json.dumps(response_body) if response_body else None,
+                    response_body=json.dumps(
+                        response_body) if response_body else None,
                     client_ip=request.client.host if request.client else None,
                     user_agent=request.headers.get("user-agent"),
                     duration_ms=duration_ms
@@ -372,7 +417,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             if isinstance(request_body, dict):
                 if "payment_mandate_contents" in request_body:
                     message_type = "payment_mandate"
-                    mandate_id = request_body.get("payment_mandate_contents", {}).get("payment_mandate_id")
+                    mandate_id = request_body.get(
+                        "payment_mandate_contents", {}).get("payment_mandate_id")
                     request_signature = request_body.get("user_authorization")
                 elif "otp_code" in request_body:
                     message_type = "otp_verification"
@@ -386,7 +432,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 response_signature = response_body.get("merchant_signature")
                 # Extract payment status
                 if response_body.get("payment_status"):
-                    payment_status = response_body["payment_status"].get("status")
+                    payment_status = response_body["payment_status"].get(
+                        "status")
 
             async for session in db_manager.get_session():
                 log_entry = AP2RequestLog(
@@ -395,10 +442,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     method=request.method,
                     message_type=message_type,
                     mandate_id=mandate_id,
-                    request_body=json.dumps(request_body) if request_body else "{}",
+                    request_body=json.dumps(
+                        request_body) if request_body else "{}",
                     request_signature=request_signature,
                     response_status=response.status_code,
-                    response_body=json.dumps(response_body) if response_body else "{}",
+                    response_body=json.dumps(
+                        response_body) if response_body else "{}",
                     response_signature=response_signature,
                     payment_status=payment_status,
                     client_ip=request.client.host if request.client else None,
@@ -952,7 +1001,8 @@ async def create_promocode(
     """
     # Validate discount type
     if promocode.discount_type not in ["percentage", "fixed_amount"]:
-        raise HTTPException(status_code=400, detail="discount_type must be 'percentage' or 'fixed_amount'")
+        raise HTTPException(
+            status_code=400, detail="discount_type must be 'percentage' or 'fixed_amount'")
 
     # Check if code already exists
     result = await session.execute(
@@ -1092,6 +1142,7 @@ class LineItem(BaseModel):
     quantity: int
     price: float
 
+
 class CheckoutSessionCreate(BaseModel):
     """Create checkout session request."""
     line_items: List[LineItem]
@@ -1099,11 +1150,13 @@ class CheckoutSessionCreate(BaseModel):
     currency: str = "SGD"
     promocode: Optional[str] = None  # Optional promocode to apply
 
+
 class CheckoutSessionUpdate(BaseModel):
     """Update checkout session request."""
     payment_mandate: Optional[Dict[str, Any]] = None
     user_signature: Optional[str] = None
     promocode: Optional[str] = None  # Optional promocode to apply/update
+
 
 class CheckoutSessionResponse(BaseModel):
     """Checkout session response."""
@@ -1114,8 +1167,10 @@ class CheckoutSessionResponse(BaseModel):
     payment: Optional[Dict[str, Any]] = None
     ap2: Optional[Dict[str, Any]] = None
 
+
 # In-memory checkout sessions (in production, use database)
 checkout_sessions: Dict[str, Dict[str, Any]] = {}
+
 
 @app.post("/ucp/v1/checkout-sessions", response_model=CheckoutSessionResponse)
 async def create_checkout_session(
@@ -1191,6 +1246,7 @@ async def create_checkout_session(
 
     return response_data
 
+
 @app.get("/ucp/v1/checkout-sessions/{session_id}", response_model=CheckoutSessionResponse)
 async def get_checkout_session(
     request: Request,
@@ -1198,13 +1254,15 @@ async def get_checkout_session(
 ):
     """UCP: Get checkout session by ID."""
     if session_id not in checkout_sessions:
-        raise HTTPException(status_code=404, detail="Checkout session not found")
+        raise HTTPException(
+            status_code=404, detail="Checkout session not found")
 
     checkout_data = checkout_sessions[session_id]
     response_data = CheckoutSessionResponse(**checkout_data)
     request.state.response_data = response_data.dict()
 
     return response_data
+
 
 @app.put("/ucp/v1/checkout-sessions/{session_id}", response_model=CheckoutSessionResponse)
 async def update_checkout_session(
@@ -1218,7 +1276,8 @@ async def update_checkout_session(
     Transitions status to 'ready_for_complete' when payment mandate is provided.
     """
     if session_id not in checkout_sessions:
-        raise HTTPException(status_code=404, detail="Checkout session not found")
+        raise HTTPException(
+            status_code=404, detail="Checkout session not found")
 
     checkout_data = checkout_sessions[session_id]
 
@@ -1276,12 +1335,104 @@ async def update_checkout_session(
             "user_authorization": update.user_signature
         }
 
+        # Generate merchant authorization signature
+        try:
+            merchant_domain = os.getenv("MERCHANT_DOMAIN", "localhost:8453")
+            cart_id = checkout_data["id"]
+            cart_contents = checkout_data["line_items"]
+
+            # Calculate cart hash
+            canonical_json = json.dumps(
+                cart_contents, sort_keys=True, separators=(',', ':'))
+            cart_hash_bytes = hashlib.sha256(
+                canonical_json.encode('utf-8')).digest()
+            cart_hash = f"sha256:{cart_hash_bytes.hex()}"
+
+            # Build DID for merchant
+            from urllib.parse import quote
+            encoded_domain = quote(merchant_domain, safe='')
+            merchant_did = f"did:web:{encoded_domain}"
+
+            now = datetime.utcnow()
+            exp = now + timedelta(minutes=60)
+
+            # Build verifiable credential for merchant authorization
+            unsigned_credential = {
+                "@context": [
+                    "https://www.w3.org/2018/credentials/v1",
+                    "https://ap2-protocol.org/mandates/v1"
+                ],
+                "type": ["VerifiableCredential", "CartMandate"],
+                "issuer": merchant_did,
+                "issuanceDate": now.isoformat() + "Z",
+                "expirationDate": exp.isoformat() + "Z",
+                "credentialSubject": {
+                    "id": f"cart:{cart_id}",
+                    "cartHash": cart_hash,
+                    "merchantGuarantee": "price_locked",
+                    "totalAmount": checkout_data["totals"]["total"],
+                    "currency": "SGD",
+                    "mandateId": update.payment_mandate.get("payment_mandate_contents", {}).get("payment_mandate_id")
+                }
+            }
+
+            # Sign credential using signer-server
+            merchant_jwt = await request.app.state.signer_client.sign_credential(
+                domain=merchant_domain,
+                unsigned_credential=unsigned_credential
+            )
+
+            # Check if TESTFAIL promocode is applied - if so, modify payload for testing
+            if checkout_data.get("promocode", {}).get("code") == "TESTFAIL":
+                # Modify the JWT payload to simulate tampered credential
+                import base64
+                parts = merchant_jwt.split('.')
+                if len(parts) == 3:
+                    # Decode the payload
+                    payload_bytes = base64.urlsafe_b64decode(parts[1] + '==')
+                    payload = json.loads(payload_bytes)
+
+                    # Add fake properties inside credentialSubject if it exists, otherwise at root
+                    if "vc" in payload and "credentialSubject" in payload["vc"]:
+                        payload["vc"]["credentialSubject"]["tampered"] = True
+                        payload["vc"]["credentialSubject"]["fake_discount"] = 99.99
+                    else:
+                        payload["tampered"] = True
+                        payload["fake_discount"] = 99.99
+
+                    # Re-encode the modified payload
+                    modified_payload = json.dumps(
+                        payload, separators=(',', ':'))
+                    modified_payload_b64 = base64.urlsafe_b64encode(
+                        modified_payload.encode()
+                    ).decode().rstrip('=')
+
+                    # Reconstruct JWT with modified payload but original signature
+                    merchant_jwt = f"{parts[0]}.{modified_payload_b64}.{parts[2]}"
+                    logger.warning(
+                        f"TESTFAIL promocode detected - modified JWT payload for checkout {session_id}")
+
+            # Extract signature portion (last part of JWT: header.payload.signature)
+            merchant_signature = merchant_jwt.split(
+                '.')[-1] if '.' in merchant_jwt else merchant_jwt
+
+            checkout_data["merchant_signature"] = merchant_signature
+            checkout_data["ap2"]["merchant_authorization"] = merchant_jwt
+            logger.info(
+                f"Generated merchant signature for checkout {session_id}")
+
+        except Exception as e:
+            logger.error(
+                f"Failed to generate merchant signature: {e}", exc_info=True)
+            logger.warning("Proceeding without merchant signature")
+
     checkout_sessions[session_id] = checkout_data
 
     response_data = CheckoutSessionResponse(**checkout_data)
     request.state.response_data = response_data.dict()
 
     return response_data
+
 
 @app.post("/ucp/v1/checkout-sessions/{session_id}/complete")
 async def complete_checkout_session(
@@ -1294,20 +1445,28 @@ async def complete_checkout_session(
     UCP: Complete checkout session.
     Processes AP2 payment mandate and returns final receipt.
     Increments promocode usage count if payment is successful.
+    Verifies user credentials before completing payment.
     """
     if session_id not in checkout_sessions:
-        raise HTTPException(status_code=404, detail="Checkout session not found")
+        raise HTTPException(
+            status_code=404, detail="Checkout session not found")
 
     checkout_data = checkout_sessions[session_id]
 
     # Allow completion if status is ready_for_complete or requires_escalation (OTP flow)
     if checkout_data["status"] not in ["ready_for_complete", "requires_escalation"]:
-        raise HTTPException(status_code=400, detail=f"Checkout session not ready for completion (status: {checkout_data['status']})")
+        raise HTTPException(
+            status_code=400, detail=f"Checkout session not ready for completion (status: {checkout_data['status']})")
 
     # Get payment mandate from checkout session
     payment_mandate = checkout_data.get("payment_mandate")
     if not payment_mandate:
         raise HTTPException(status_code=400, detail="Payment mandate missing")
+
+    # Add merchant authorization to payment mandate
+    merchant_auth = checkout_data.get("ap2", {}).get("merchant_authorization")
+    if merchant_auth:
+        payment_mandate["merchant_authorization"] = merchant_auth
 
     # Process through AP2 payment agent
     payment_agent = app.state.payment_agent
@@ -1326,7 +1485,7 @@ async def complete_checkout_session(
         ):
             raise HTTPException(status_code=400, detail="Invalid OTP code")
 
-        receipt = payment_agent.process_payment(mandate_obj)
+        receipt = await payment_agent.process_payment(mandate_obj)
     else:
         # Check if OTP challenge needed
         if payment_agent.should_raise_otp_challenge(mandate_obj):
@@ -1343,7 +1502,7 @@ async def complete_checkout_session(
             return response_data
 
         # Process payment
-        receipt = payment_agent.process_payment(mandate_obj)
+        receipt = await payment_agent.process_payment(mandate_obj)
 
     # If payment successful and promocode was applied, increment usage count
     if isinstance(receipt.payment_status, PaymentReceiptSuccess) and "promocode" in checkout_data:
@@ -1379,18 +1538,34 @@ async def complete_checkout_session(
             description=f"Purchase reward (${payment_amount:.2f})"
         )
 
-        logger.info(f"Awarded {total_points} loyalty points to {buyer_email} for payment {payment_id}")
+        logger.info(
+            f"Awarded {total_points} loyalty points to {buyer_email} for payment {payment_id}")
 
     # Update checkout session with completion
-    checkout_data["status"] = "complete"
     checkout_data["receipt"] = receipt.dict()
     checkout_data["completed_at"] = datetime.utcnow().isoformat()
 
-    response_data = {
-        "status": "success",
-        "checkout": checkout_data,
-        "receipt": receipt.dict()
-    }
+    # Check if payment was successful
+    if isinstance(receipt.payment_status, PaymentReceiptSuccess):
+        checkout_data["status"] = "complete"
+        response_data = {
+            "status": "success",
+            "checkout": checkout_data,
+            "receipt": receipt.dict(),
+            "message": "Payment completed successfully!"
+        }
+    else:
+        # Payment failed or had an error
+        checkout_data["status"] = "failed"
+        error_msg = getattr(receipt.payment_status,
+                            'error_message', 'Payment failed')
+        response_data = {
+            "status": "failed",
+            "checkout": checkout_data,
+            "receipt": receipt.dict(),
+            "message": error_msg
+        }
+
     request.state.response_data = response_data
 
     return response_data
@@ -1450,7 +1625,8 @@ async def update_settings(settings: MerchantSettingsUpdate):
 
     if settings.otp_amount_threshold is not None:
         payment_agent.otp_amount_threshold = settings.otp_amount_threshold
-        logger.info(f"OTP amount threshold updated to: ${settings.otp_amount_threshold}")
+        logger.info(
+            f"OTP amount threshold updated to: ${settings.otp_amount_threshold}")
 
     return {
         "message": "Settings updated successfully (in-memory only)",
@@ -1474,7 +1650,8 @@ async def get_ucp_logs(
     query = select(UCPRequestLog).order_by(desc(UCPRequestLog.created_at))
 
     if endpoint_filter:
-        query = query.where(UCPRequestLog.endpoint.like(f"%{endpoint_filter}%"))
+        query = query.where(
+            UCPRequestLog.endpoint.like(f"%{endpoint_filter}%"))
 
     query = query.limit(limit).offset(offset)
 
@@ -1559,7 +1736,8 @@ async def clear_all_logs(session: AsyncSession = Depends(get_db)):
         }
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to clear logs: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to clear logs: {str(e)}")
 
 
 # ============================================================================
@@ -1645,7 +1823,8 @@ async def query_loyalty(request: LoyaltyQueryRequest):
 
     except Exception as e:
         logger.error(f"Loyalty query error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to process loyalty inquiry: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to process loyalty inquiry: {str(e)}")
 
 
 @app.post("/api/loyalty/status")
@@ -1659,7 +1838,8 @@ async def get_loyalty_status_endpoint(request: LoyaltyStatusRequest):
 
     except Exception as e:
         logger.error(f"Loyalty status error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get loyalty status: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get loyalty status: {str(e)}")
 
 
 @app.post("/api/loyalty/redeem")
@@ -1678,7 +1858,8 @@ async def redeem_loyalty_endpoint(request: LoyaltyRedeemRequest):
 
     except Exception as e:
         logger.error(f"Loyalty redemption error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to redeem loyalty points: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to redeem loyalty points: {str(e)}")
 
 
 # Internal endpoint to award points (called after successful payment)
@@ -1704,7 +1885,8 @@ async def award_loyalty_points_endpoint(
 
     except Exception as e:
         logger.error(f"Loyalty award error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to award loyalty points: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to award loyalty points: {str(e)}")
 
 
 # ============================================================================
@@ -1752,7 +1934,8 @@ async def get_loyalty_user_detail(user_email: str):
 
     except Exception as e:
         logger.error(f"Failed to get loyalty user details: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get user details: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get user details: {str(e)}")
 
 
 class ManualPointsAdjustment(BaseModel):
@@ -1781,7 +1964,8 @@ async def adjust_points_manually(adjustment: ManualPointsAdjustment):
             description=f"{adjustment.adjustment_type.upper()}: {adjustment.description}"
         )
 
-        logger.info(f"Manual points adjustment: {adjustment.points} points for {adjustment.user_email}")
+        logger.info(
+            f"Manual points adjustment: {adjustment.points} points for {adjustment.user_email}")
 
         return {
             "success": True,
@@ -1791,7 +1975,8 @@ async def adjust_points_manually(adjustment: ManualPointsAdjustment):
 
     except Exception as e:
         logger.error(f"Failed to adjust points: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to adjust points: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to adjust points: {str(e)}")
 
 
 @app.get("/api/loyalty/stats")
@@ -1805,11 +1990,13 @@ async def get_loyalty_stats():
     # Count members by tier
     tier_breakdown = {}
     for tier in ["bronze", "silver", "gold", "platinum"]:
-        count = sum(1 for t in loyalty_agent.loyalty_tiers.values() if t == tier)
+        count = sum(
+            1 for t in loyalty_agent.loyalty_tiers.values() if t == tier)
         tier_breakdown[tier] = count
 
     # Count total transactions
-    total_transactions = sum(len(history) for history in loyalty_agent.loyalty_history.values())
+    total_transactions = sum(len(history)
+                             for history in loyalty_agent.loyalty_history.values())
 
     return {
         "total_members": total_members,
@@ -1818,6 +2005,27 @@ async def get_loyalty_stats():
         "total_transactions": total_transactions,
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+# ============================================================================
+# DID Document Endpoint
+# ============================================================================
+
+@app.get("/.well-known/did.json")
+async def get_did_document(request: Request):
+    """
+    Serve DID document for merchant's DID:web identifier.
+    Returns the DID document generated and stored during startup.
+    """
+    if not request.app.state.did_document:
+        logger.error(
+            "DID document not available - wallet initialization may have failed")
+        raise HTTPException(
+            status_code=503,
+            detail="DID document unavailable. Merchant wallet may not be initialized."
+        )
+
+    return request.app.state.did_document
 
 
 # ============================================================================

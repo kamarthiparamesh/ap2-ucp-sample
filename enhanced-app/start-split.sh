@@ -57,51 +57,40 @@ check_port 8450 || exit 1  # Chat frontend
 check_port 8451 || exit 1  # Merchant portal frontend
 check_port 8452 || exit 1  # Chat backend
 check_port 8453 || exit 1  # Merchant backend
+check_port 8454 || exit 1  # Signer server
 
 echo ""
-echo "Step 1: Starting Merchant Backend (UCP Server)"
+echo "Step 1: Starting Signer Server (Affinidi TDK)"
+echo "----------------------------------------------"
+cd "$SCRIPT_DIR/signer-server"
+
+# Start signer server using its own start.sh
+echo "Starting Signer Server on port 8454..."
+nohup bash start.sh > "$LOGS_DIR/signer-server.log" 2>&1 &
+SIGNER_PID=$!
+echo $SIGNER_PID > "$PIDS_DIR/signer-server.pid"
+echo "✓ Signer Server started (PID: $SIGNER_PID)"
+
+# Wait for signer server to be ready
+wait_for_service "http://localhost:8454/health" "Signer Server" || exit 1
+
+echo ""
+echo "Step 2: Starting Merchant Backend (UCP Server)"
 echo "----------------------------------------------"
 cd "$SCRIPT_DIR/merchant-backend"
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "venv" ]; then
-    echo "Creating Python virtual environment for merchant backend..."
-    python3 -m venv venv
-fi
-
-# Activate virtual environment and install dependencies
-source venv/bin/activate
-echo "Installing merchant backend dependencies..."
-pip install -q --upgrade pip
-pip install -q -r <(python3 -c "
-import sys
-deps = [
-    'fastapi>=0.109.0',
-    'uvicorn[standard]>=0.38.0',
-    'pydantic>=2.12.0',
-    'sqlalchemy>=2.0.0',
-    'aiosqlite>=0.19.0',
-    'python-dotenv>=1.0.0',
-    'httpx>=0.26.0',
-    'cryptography>=41.0.0',
-]
-for dep in deps:
-    print(dep)
-")
-
-# Start merchant backend
+# Start merchant backend using its own start.sh
 echo "Starting Merchant Backend on port 8453..."
-nohup python3 main.py > "$LOGS_DIR/merchant-backend.log" 2>&1 &
+nohup bash start.sh > "$LOGS_DIR/merchant-backend.log" 2>&1 &
 MERCHANT_PID=$!
 echo $MERCHANT_PID > "$PIDS_DIR/merchant-backend.pid"
 echo "✓ Merchant Backend started (PID: $MERCHANT_PID)"
-deactivate
 
 # Wait for merchant backend to be ready
 wait_for_service "http://localhost:8453/health" "Merchant Backend" || exit 1
 
 echo ""
-echo "Step 2: Starting Chat Backend (UCP Client)"
+echo "Step 3: Starting Chat Backend (UCP Client)"
 echo "-------------------------------------------"
 cd "$SCRIPT_DIR/chat-backend"
 
@@ -145,7 +134,7 @@ deactivate
 wait_for_service "http://localhost:8452/health" "Chat Backend" || exit 1
 
 echo ""
-echo "Step 3: Starting Frontend Applications"
+echo "Step 4: Starting Frontend Applications"
 echo "---------------------------------------"
 
 # Start Chat Frontend
@@ -195,7 +184,13 @@ echo "    - Health:                       http://localhost:8453/health"
 echo "    - UCP Discovery:                http://localhost:8453/.well-known/ucp"
 echo "    - API Docs:                     http://localhost:8453/docs"
 echo ""
+echo "  • Signer Server (Affinidi TDK):   http://localhost:8454"
+echo "    - Health:                       http://localhost:8454/health"
+echo "    - DID Generation:               http://localhost:8454/api/did-web-generate"
+echo "    - JWT Signing:                  http://localhost:8454/api/sign-jwt"
+echo ""
 echo "Logs:"
+echo "  • Signer Server:                  $LOGS_DIR/signer-server.log"
 echo "  • Merchant Backend:               $LOGS_DIR/merchant-backend.log"
 echo "  • Chat Backend:                   $LOGS_DIR/chat-backend.log"
 echo "  • Chat Frontend:                  $LOGS_DIR/chat-frontend.log"
@@ -206,6 +201,6 @@ echo ""
 echo "UCP Architecture:"
 echo "  Chat Frontend (8450) → Chat Backend (8452)"
 echo "                         ↓ (UCP REST)"
-echo "                         Merchant Backend (8453)"
-echo "  Merchant Portal (8451) → Merchant Backend (8453)"
+echo "                         Merchant Backend (8453) → Signer Server (8454)"
+echo "  Merchant Portal (8451) → Merchant Backend (8453) → Signer Server (8454)"
 echo ""

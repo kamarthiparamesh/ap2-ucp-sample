@@ -179,7 +179,8 @@ async def lifespan(app: FastAPI):
     if app.state.mastercard_client.enabled:
         logger.info("Mastercard API integration enabled")
     else:
-        logger.warning("Mastercard API integration disabled (credentials not configured)")
+        logger.warning(
+            "Mastercard API integration disabled (credentials not configured)")
 
     yield
 
@@ -489,7 +490,8 @@ async def register_user(
     # Tokenize card with Mastercard API if enabled
     if mastercard.enabled and card_network == "mastercard":
         try:
-            logger.info(f"Tokenizing card for user {registration.email} with Mastercard API")
+            logger.info(
+                f"Tokenizing card for user {registration.email} with Mastercard API")
             token_response = await mastercard.tokenization.tokenize_card(
                 card_number=default_card_number.replace(" ", ""),
                 expiry_month=12,
@@ -504,7 +506,8 @@ async def register_user(
             payment_card.tokenization_date = datetime.utcnow()
             payment_card.is_tokenized = True
 
-            logger.info(f"Card tokenized successfully for {registration.email}: {token_response['token_unique_reference'][:20]}...")
+            logger.info(
+                f"Card tokenized successfully for {registration.email}: {token_response['token_unique_reference'][:20]}...")
         except Exception as e:
             logger.error(f"Failed to tokenize card with Mastercard API: {e}")
             logger.info("Continuing with encrypted card storage only")
@@ -515,7 +518,8 @@ async def register_user(
     await session.refresh(new_user)
     await session.refresh(payment_card)
 
-    logger.info(f"User registered: {registration.email} with default card ending {last_four} (tokenized: {payment_card.is_tokenized})")
+    logger.info(
+        f"User registered: {registration.email} with default card ending {last_four} (tokenized: {payment_card.is_tokenized})")
 
     return UserRegistrationResponse(
         user_id=user_id,
@@ -532,7 +536,8 @@ async def verify_passkey(
     session: AsyncSession = Depends(get_db)
 ):
     """Verify passkey authentication for payment mandate signing."""
-    logger.info(f"Verifying passkey for {verification.email}, credential_id: {verification.credential_id[:20]}...")
+    logger.info(
+        f"Verifying passkey for {verification.email}, credential_id: {verification.credential_id[:20]}...")
 
     # First, try to find user by email only
     result = await session.execute(
@@ -544,7 +549,8 @@ async def verify_passkey(
         logger.error(f"User not found for email: {verification.email}")
         raise HTTPException(status_code=404, detail="User not found")
 
-    logger.info(f"Found user: {user.email}, stored credential_id: {user.passkey_credential_id[:20] if user.passkey_credential_id else 'None'}...")
+    logger.info(
+        f"Found user: {user.email}, stored credential_id: {user.passkey_credential_id[:20] if user.passkey_credential_id else 'None'}...")
 
     # Check if credential ID matches
     if user.passkey_credential_id != verification.credential_id:
@@ -570,7 +576,8 @@ async def verify_passkey(
         "user_id": user.id,
         "email": user.email,
         "display_name": user.display_name,
-        "signature": verification.signature  # Return the passkey signature for mandate signing
+        # Return the passkey signature for mandate signing
+        "signature": verification.signature
     }
 
 
@@ -711,7 +718,8 @@ async def prepare_checkout(
     card = result.scalar_one_or_none()
 
     if not card:
-        raise HTTPException(status_code=404, detail="No payment card found. Please register first.")
+        raise HTTPException(
+            status_code=404, detail="No payment card found. Please register first.")
 
     # Transform cart items for UCP checkout session
     cart_items = [
@@ -733,7 +741,8 @@ async def prepare_checkout(
     )
 
     # Get final total from checkout session (includes any promocode discount)
-    final_total = checkout_session.get("totals", {}).get("total", cart_info["total"])
+    final_total = checkout_session.get(
+        "totals", {}).get("total", cart_info["total"])
 
     # Update cart_info with discounted total if promocode was applied
     updated_cart_info = cart_info.copy()
@@ -764,7 +773,8 @@ async def prepare_checkout(
     session.add(db_mandate)
     await session.commit()
 
-    logger.info(f"Prepared checkout for {request.user_email}: UCP session {checkout_session['id']}, mandate {mandate_id}")
+    logger.info(
+        f"Prepared checkout for {request.user_email}: UCP session {checkout_session['id']}, mandate {mandate_id}")
 
     # Transform cart items to match frontend format
     frontend_cart_items = [
@@ -815,10 +825,12 @@ async def confirm_checkout(
     db_mandate = result.scalar_one_or_none()
 
     if not db_mandate:
-        raise HTTPException(status_code=404, detail="Payment mandate not found")
+        raise HTTPException(
+            status_code=404, detail="Payment mandate not found")
 
     if db_mandate.status != "pending":
-        raise HTTPException(status_code=400, detail=f"Mandate already {db_mandate.status}")
+        raise HTTPException(
+            status_code=400, detail=f"Mandate already {db_mandate.status}")
 
     # Get payment card to check if tokenized
     card_result = await session.execute(
@@ -829,7 +841,8 @@ async def confirm_checkout(
     # Mastercard Authentication (if enabled and card is tokenized)
     if mastercard.enabled and payment_card and payment_card.is_tokenized:
         try:
-            logger.info(f"Initiating Mastercard authentication for mandate {request.mandate_id}")
+            logger.info(
+                f"Initiating Mastercard authentication for mandate {request.mandate_id}")
 
             # Initiate authentication with Mastercard
             auth_response = await mastercard.authentication.initiate_authentication(
@@ -852,7 +865,8 @@ async def confirm_checkout(
                     status="pending",
                     created_at=datetime.utcnow(),
                     expires_at=datetime.utcnow() + timedelta(minutes=5),
-                    raw_response=json.dumps(auth_response.get("raw_response", {}))
+                    raw_response=json.dumps(
+                        auth_response.get("raw_response", {}))
                 )
                 session.add(auth_challenge)
 
@@ -860,7 +874,8 @@ async def confirm_checkout(
                 db_mandate.status = "mastercard_auth_required"
                 await session.commit()
 
-                logger.info(f"Mastercard authentication required: {auth_response['authentication_method']}")
+                logger.info(
+                    f"Mastercard authentication required: {auth_response['authentication_method']}")
 
                 return ConfirmCheckoutResponse(
                     status="mastercard_auth_required",
@@ -872,7 +887,8 @@ async def confirm_checkout(
                     message=f"Mastercard {auth_response['authentication_method']} authentication required"
                 )
             else:
-                logger.info(f"Mastercard authentication approved automatically for mandate {request.mandate_id}")
+                logger.info(
+                    f"Mastercard authentication approved automatically for mandate {request.mandate_id}")
 
         except Exception as e:
             logger.error(f"Mastercard authentication error: {e}")
@@ -903,13 +919,22 @@ async def confirm_checkout(
             session_id=db_mandate.checkout_session_id
         )
 
+        receipt = completion_result.get("receipt", {})
+        if completion_result.get("status") != "success":
+            return ConfirmCheckoutResponse(
+                status="failed",
+                receipt=receipt,
+                message=f"Payment failed: {completion_result.get('message')}"
+            )
+
         # Check if OTP challenge
         otp_challenge = ap2_client.extract_otp_challenge(completion_result)
         if otp_challenge:
             db_mandate.status = "otp_required"
             await session.commit()
 
-            logger.info(f"OTP challenge for UCP checkout {db_mandate.checkout_session_id}")
+            logger.info(
+                f"OTP challenge for UCP checkout {db_mandate.checkout_session_id}")
             return ConfirmCheckoutResponse(
                 status="otp_required",
                 otp_challenge=otp_challenge,
@@ -917,7 +942,6 @@ async def confirm_checkout(
             )
 
         # Payment successful
-        receipt = completion_result.get("receipt", {})
         db_mandate.status = "completed"
         db_mandate.completed_at = datetime.utcnow()
 
@@ -936,7 +960,8 @@ async def confirm_checkout(
         session.add(db_receipt)
         await session.commit()
 
-        logger.info(f"Payment successful via UCP for checkout {db_mandate.checkout_session_id}")
+        logger.info(
+            f"Payment successful via UCP for checkout {db_mandate.checkout_session_id}")
         return ConfirmCheckoutResponse(
             status="success",
             receipt=receipt,
@@ -947,7 +972,8 @@ async def confirm_checkout(
         db_mandate.status = "failed"
         await session.commit()
 
-        logger.error(f"Payment failed for UCP checkout {db_mandate.checkout_session_id}: {e}")
+        logger.error(
+            f"Payment failed for UCP checkout {db_mandate.checkout_session_id}: {e}")
         return ConfirmCheckoutResponse(
             status="failed",
             message=f"Payment failed: {str(e)}"
@@ -1008,7 +1034,8 @@ async def verify_otp_and_complete(
             session.add(db_receipt)
             await session.commit()
 
-            logger.info(f"OTP verified via UCP, payment successful for checkout {db_mandate.checkout_session_id}")
+            logger.info(
+                f"OTP verified via UCP, payment successful for checkout {db_mandate.checkout_session_id}")
             return ConfirmCheckoutResponse(
                 status="success",
                 receipt=receipt,
@@ -1019,14 +1046,16 @@ async def verify_otp_and_complete(
             db_mandate.status = "failed"
             await session.commit()
 
-            logger.warning(f"OTP verification failed for UCP checkout {db_mandate.checkout_session_id}")
+            logger.warning(
+                f"OTP verification failed for UCP checkout {db_mandate.checkout_session_id}")
             return ConfirmCheckoutResponse(
                 status="failed",
                 message="Invalid OTP code"
             )
 
     except Exception as e:
-        logger.error(f"OTP verification error for UCP checkout {db_mandate.checkout_session_id}: {e}")
+        logger.error(
+            f"OTP verification error for UCP checkout {db_mandate.checkout_session_id}: {e}")
         return ConfirmCheckoutResponse(
             status="failed",
             message=f"OTP verification failed: {str(e)}"
@@ -1052,7 +1081,8 @@ async def verify_mastercard_authentication(
     Verify Mastercard authentication challenge and complete payment.
     """
     if not mastercard.enabled:
-        raise HTTPException(status_code=400, detail="Mastercard authentication not enabled")
+        raise HTTPException(
+            status_code=400, detail="Mastercard authentication not enabled")
 
     # Get authentication challenge
     result = await session.execute(
@@ -1064,20 +1094,24 @@ async def verify_mastercard_authentication(
     auth_challenge = result.scalar_one_or_none()
 
     if not auth_challenge:
-        raise HTTPException(status_code=404, detail="Authentication challenge not found")
+        raise HTTPException(
+            status_code=404, detail="Authentication challenge not found")
 
     if auth_challenge.status != "pending":
-        raise HTTPException(status_code=400, detail=f"Challenge already {auth_challenge.status}")
+        raise HTTPException(
+            status_code=400, detail=f"Challenge already {auth_challenge.status}")
 
     # Check expiry
     if datetime.utcnow() > auth_challenge.expires_at:
         auth_challenge.status = "expired"
         await session.commit()
-        raise HTTPException(status_code=400, detail="Authentication challenge expired")
+        raise HTTPException(
+            status_code=400, detail="Authentication challenge expired")
 
     # Verify with Mastercard
     try:
-        logger.info(f"Verifying Mastercard authentication for challenge {request.challenge_id}")
+        logger.info(
+            f"Verifying Mastercard authentication for challenge {request.challenge_id}")
 
         auth_result = await mastercard.authentication.verify_authentication(
             challenge_id=auth_challenge.challenge_id,
@@ -1100,7 +1134,8 @@ async def verify_mastercard_authentication(
             db_mandate = mandate_result.scalar_one_or_none()
 
             if not db_mandate:
-                raise HTTPException(status_code=404, detail="Payment mandate not found")
+                raise HTTPException(
+                    status_code=404, detail="Payment mandate not found")
 
             # Update mandate status
             db_mandate.status = "signed"
@@ -1126,7 +1161,8 @@ async def verify_mastercard_authentication(
                 db_mandate.status = "otp_required"
                 await session.commit()
 
-                logger.info(f"Additional OTP required after Mastercard auth for checkout {db_mandate.checkout_session_id}")
+                logger.info(
+                    f"Additional OTP required after Mastercard auth for checkout {db_mandate.checkout_session_id}")
                 return ConfirmCheckoutResponse(
                     status="otp_required",
                     otp_challenge=otp_challenge,
@@ -1153,7 +1189,8 @@ async def verify_mastercard_authentication(
             session.add(db_receipt)
             await session.commit()
 
-            logger.info(f"Mastercard authentication verified, payment successful for checkout {db_mandate.checkout_session_id}")
+            logger.info(
+                f"Mastercard authentication verified, payment successful for checkout {db_mandate.checkout_session_id}")
             return ConfirmCheckoutResponse(
                 status="success",
                 receipt=receipt,
@@ -1165,7 +1202,8 @@ async def verify_mastercard_authentication(
             auth_challenge.attempts += 1
             await session.commit()
 
-            logger.warning(f"Mastercard authentication failed for challenge {request.challenge_id}")
+            logger.warning(
+                f"Mastercard authentication failed for challenge {request.challenge_id}")
             return ConfirmCheckoutResponse(
                 status="failed",
                 message="Authentication verification failed"
@@ -1219,7 +1257,8 @@ async def query_loyalty_via_a2a(
 
     except Exception as e:
         logger.error(f"Loyalty query error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to query loyalty: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to query loyalty: {str(e)}")
 
 
 @app.get("/api/loyalty/status")
@@ -1234,7 +1273,8 @@ async def get_user_loyalty_status(
 
     except Exception as e:
         logger.error(f"Loyalty status error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get loyalty status: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get loyalty status: {str(e)}")
 
 
 @app.post("/api/loyalty/redeem")
@@ -1256,7 +1296,8 @@ async def redeem_points(
 
     except Exception as e:
         logger.error(f"Loyalty redemption error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to redeem points: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to redeem points: {str(e)}")
 
 
 # ============================================================================
@@ -1291,7 +1332,8 @@ async def reset_database(session: AsyncSession = Depends(get_db)):
     except Exception as e:
         await session.rollback()
         logger.error(f"Database reset failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Database reset failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Database reset failed: {str(e)}")
 
 
 # ============================================================================

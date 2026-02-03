@@ -40,6 +40,7 @@ stop_service() {
 }
 
 # Stop all services
+stop_service "signer-server"
 stop_service "merchant-backend"
 stop_service "chat-backend"
 stop_service "chat-frontend"
@@ -49,7 +50,7 @@ stop_service "merchant-portal"
 echo ""
 echo "Cleaning up any remaining processes on ports..."
 
-for port in 8450 8451 8452 8453; do
+for port in 8450 8451 8452 8453 8454; do
     pids=$(lsof -ti:$port 2>/dev/null || true)
     if [ -n "$pids" ]; then
         echo "Killing processes on port $port: $pids"
