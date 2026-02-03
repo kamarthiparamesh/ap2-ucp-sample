@@ -30,21 +30,47 @@ The application is split into two independent backends that communicate via UCP:
 │   • WebAuthn Passkeys        │  │ • Product Catalog            │
 │   • Encrypted Card Storage   │  │ • CRUD API                   │
 │   • Logout Feature           │  │ • Request Logging            │
-└──────────────┬───────────────┘  └──────────▲───────────────────┘
-               │                              │
-               │    UCP REST Protocol         │
-               │    /.well-known/ucp          │
-               │    /ucp/v1/checkout-sessions │
-               │    /ucp/products/search      │
-               │                              │
-               │    AP2 via UCP Checkout      │
-               │    (No direct AP2 endpoints) │
-               └──────────────────────────────┘
+└──────────────┬───────────────┘  └──────────┬────────────────|──┘
+               │                              │               |
+               │    UCP REST Protocol         │               | 1.Startup: Create Did:web Wallet & Host did Doc
+               │    /.well-known/ucp          │               | /.well-known/did.json
+               │    /ucp/v1/checkout-sessions │               | 2.Checkout: Sign Cart Mandate with Wallet
+               │    /ucp/products/search      │               | 3.Payment: Verify Mandate
+               │                              │               |
+               │    AP2 via UCP Checkout      │               │
+               │    (No direct AP2 endpoints) │               │
+               └──────────────────────────────┘               │
+                                                              │
+                                                ┌─────────────|────────────────
+                                                │ Signer Service (Port 8454)   │
+                                                │ ===========================  │
+                                                │ • DID:web Wallet Management  │
+                                                │ • JWT-VC Signing (Affinidi)  │
+                                                │ • Credential Verification    │
+                                                │                              │
+                                                │ 🔐 Endpoints:                │
+                                                │ 1. POST /api/did-web-generate│
+                                                │ 2. POST /api/sign-credential │
+                                                │ 3. POST /api/verify-credential
+                                                └────────────┬─────────────────┘
+                                                             │
+                                                             │ Affinidi TDK
+                                                             │ (Wallets + Signing + Verification)
+                                                             ▼
+                                                ┌────────────────────────────────┐
+                                                │   Affinidi Infrastructure      │
+                                                │   =========================    │
+                                                │ • DID:web Registry             │
+                                                │ • Key Management (Signing)     │
+                                                │ • JWT-VC Signing/Verification  │
+                                                └────────────────────────────────┘
+
 ```
 
 ### Key Components
 
 #### 1. **Chat Backend** (Port 8452) - UCP Client + AP2 Consumer Agent
+
 - **Role**: Consumer/Client + Credentials Provider
 - **Technology**: FastAPI + Ollama LLM + SQLAlchemy + Cryptography
 - **Responsibilities**:
@@ -60,6 +86,7 @@ The application is split into two independent backends that communicate via UCP:
   - Separate SQLite database for user credentials (`chat_app.db`)
 
 #### 2. **Merchant Backend** (Port 8453) - UCP Server + AP2 Merchant Agent
+
 - **Role**: Provider/Server + Payment Processor
 - **Technology**: FastAPI + SQLAlchemy + SQLite + Ollama
 - **Responsibilities**:
@@ -74,6 +101,7 @@ The application is split into two independent backends that communicate via UCP:
   - **Security**: Never stores or sees raw payment card numbers (token-based only)
 
 #### 3. **Frontend Applications**
+
 - **Chat Frontend** (Port 8450): Customer-facing shopping interface with registration, checkout, and passkey auth
 - **Merchant Portal** (Port 8451): Admin interface for product management
 
@@ -88,6 +116,7 @@ GET http://localhost:8451/.well-known/ucp
 ```
 
 **Response:**
+
 ```json
 {
   "ucp": {
@@ -163,13 +192,14 @@ GET http://localhost:8451/ucp/products/search?q=cookies&limit=5
 ```
 
 **Response:**
+
 ```json
 {
   "items": [
     {
       "id": "PROD-001",
       "title": "Chocochip Cookies",
-      "price": 499,  // Price in cents
+      "price": 499, // Price in cents
       "image_url": "...",
       "description": "Delicious chocolate chip cookies"
     }
@@ -221,6 +251,7 @@ POST http://localhost:8453/ucp/v1/checkout-sessions/{id}/complete
 ```
 
 **Key Features:**
+
 - ✅ **UCP Compliant**: Follows https://ucp.dev/specification/checkout
 - ✅ **AP2 Integration**: Payment mandates processed via AP2 agent internally
 - ✅ **Session Management**: Stateful checkout with status transitions
@@ -339,11 +370,12 @@ DELETE /api/dashboard/clear-logs   # Clear all logs
 ### AP2 Payment Receipt
 
 **Success:**
+
 ```json
 {
   "payment_mandate_id": "PM-1A2B3C4D5E6F7890",
   "payment_id": "PAY-ABC123456789",
-  "amount": {"currency": "SGD", "value": 15.99},
+  "amount": { "currency": "SGD", "value": 15.99 },
   "payment_status": {
     "status_code": "SUCCESS",
     "message": "Payment processed successfully"
@@ -353,6 +385,7 @@ DELETE /api/dashboard/clear-logs   # Clear all logs
 ```
 
 **OTP Challenge:**
+
 ```json
 {
   "payment_mandate_id": "PM-1A2B3C4D5E6F7890",
@@ -408,6 +441,7 @@ DELETE /api/dashboard/clear-logs   # Clear all logs
 The application includes **optional** integration with Mastercard's Card on File (CoF) and Secure Card on File (SCoF) APIs. This feature is **disabled by default** and the app works completely without it.
 
 **When enabled**, Mastercard APIs add two enhancements:
+
 1. **Tokenization** - During registration, card numbers are replaced with network tokens
 2. **Authentication** - During payment, additional risk-based authentication may be required
 
@@ -480,6 +514,7 @@ Enhanced Flow (MASTERCARD_ENABLED=true and card.is_tokenized=True):
 ```
 
 **Code Locations:**
+
 - Initial auth check: [chat-backend/main.py:807-856](chat-backend/main.py#L807-L856)
 - Verification endpoint: [chat-backend/main.py:1021-1156](chat-backend/main.py#L1021-L1156)
 
@@ -488,6 +523,7 @@ Enhanced Flow (MASTERCARD_ENABLED=true and card.is_tokenized=True):
 When Mastercard is enabled, the following database changes are made:
 
 **PaymentCard table additions:**
+
 ```python
 mastercard_token = Column(String)              # Network token (e.g., "4111111111111111")
 mastercard_token_ref = Column(String)          # Unique reference (e.g., "DWSPMC000...")
@@ -497,6 +533,7 @@ is_tokenized = Column(Boolean, default=False)  # Flag indicating tokenization st
 ```
 
 **New table: mastercard_auth_challenges**
+
 ```python
 id = Column(String, primary_key=True)
 payment_mandate_id = Column(String, ForeignKey("payment_mandates.id"))
@@ -518,13 +555,13 @@ raw_response = Column(Text)                    # Full API response (JSON)
 
 The Mastercard integration is designed to **never break** the payment flow:
 
-| Scenario | Behavior |
-|----------|----------|
-| MASTERCARD_ENABLED=false | Uses encrypted card storage, no API calls |
-| Invalid credentials | Logs error, uses encrypted card storage |
-| Tokenization fails | Logs error, continues with encrypted card |
-| Authentication API error | Logs error, proceeds to payment |
-| Verification timeout | Challenge expires, user can retry checkout |
+| Scenario                 | Behavior                                   |
+| ------------------------ | ------------------------------------------ |
+| MASTERCARD_ENABLED=false | Uses encrypted card storage, no API calls  |
+| Invalid credentials      | Logs error, uses encrypted card storage    |
+| Tokenization fails       | Logs error, continues with encrypted card  |
+| Authentication API error | Logs error, proceeds to payment            |
+| Verification timeout     | Challenge expires, user can retry checkout |
 
 **All errors are caught and logged** - the payment flow always continues.
 
@@ -559,12 +596,14 @@ headers["Authorization"] = f'OAuth {format_oauth_params(oauth_params)}'
 ### Testing Mastercard Integration
 
 **1. Get sandbox credentials:**
+
 - Sign up at https://developer.mastercard.com/
 - Create project for "Card on File" and "Secure Card on File"
 - Download consumer key and signing key (.p12)
 - Convert to .pem: `openssl pkcs12 -in key.p12 -out key.pem -nodes`
 
 **2. Configure environment:**
+
 ```bash
 # Edit enhanced-app/chat-backend/.env
 MASTERCARD_ENABLED=true
@@ -574,6 +613,7 @@ MASTERCARD_SANDBOX=true
 ```
 
 **3. Restart and test:**
+
 ```bash
 ./stop-split.sh && ./start-split.sh
 
@@ -582,6 +622,7 @@ tail -f enhanced-app/chat-backend/chat-backend.log | grep -i mastercard
 ```
 
 **4. Expected log output:**
+
 ```
 INFO:     Mastercard API integration enabled
 INFO:main:Tokenizing card for user test@example.com with Mastercard API
@@ -594,6 +635,7 @@ INFO:main:Mastercard authentication verified, payment successful
 ### Documentation
 
 For complete Mastercard integration documentation, see:
+
 - **[Mastercard Integration Guide](MASTERCARD_INTEGRATION.md)** - Full setup and API reference
 - **[Mastercard Setup Guide](MASTERCARD_SETUP.md)** - Step-by-step credential setup
 - **[Mastercard Developer Portal](https://developer.mastercard.com/)** - Official API docs
@@ -609,12 +651,14 @@ For complete Mastercard integration documentation, see:
 ### Installation & Running
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/abhinavasr/ucp-sample.git
    cd ucp-sample
    ```
 
 2. **Configure environment**
+
    ```bash
    # Edit enhanced-app/chat-backend/.env
    OLLAMA_URL=http://192.168.86.41:11434
@@ -627,6 +671,7 @@ For complete Mastercard integration documentation, see:
    ```
 
 3. **Start all services**
+
    ```bash
    ./start-split.sh
    ```
@@ -663,6 +708,7 @@ For complete Mastercard integration documentation, see:
    - Fallback to encrypted card storage if tokenization fails
 
    **To enable:**
+
    ```bash
    # Edit enhanced-app/chat-backend/.env
    MASTERCARD_ENABLED=true
@@ -696,12 +742,14 @@ For complete Mastercard integration documentation, see:
 If you encounter database errors (like "table has no column"), the database schema may be outdated:
 
 **Option 1: Use the Reset Database feature (recommended for development)**
+
 1. Visit http://localhost:8450
 2. Click "Reset DB" button in the navigation menu
 3. Confirm the action
 4. This will clear all user data, payment cards, mandates, and transactions
 
 **Option 2: Manually delete database files**
+
 ```bash
 # Stop services
 ./stop-split.sh
@@ -798,6 +846,7 @@ curl -X POST http://localhost:8452/api/chat \
 ```
 
 The chat backend will:
+
 1. Detect product search intent
 2. Call merchant backend via UCP: `GET /ucp/products/search?q=cookies`
 3. Convert UCP format (cents) to dollars
@@ -807,6 +856,7 @@ The chat backend will:
 ## 🎯 Key Features
 
 ### UCP Communication
+
 - ✅ **Discovery**: Chat backend discovers merchant capabilities via `/.well-known/ucp`
 - ✅ **Standard Protocol**: UCP-compliant REST endpoints following https://ucp.dev/specification/
 - ✅ **Checkout Sessions**: Full UCP checkout flow with AP2 payment integration
@@ -815,6 +865,7 @@ The chat backend will:
 - ✅ **Extensible**: Easy to add more UCP capabilities and extensions
 
 ### Chat Backend Features
+
 - 🤖 **AI-powered conversation** with Ollama LLM
 - 🔍 **Automatic product search** via UCP product discovery
 - 🛒 **Shopping cart management** with session persistence
@@ -826,6 +877,7 @@ The chat backend will:
 - 🗄️ **Database reset functionality** accessible from chat menu (clears all user data, cards, mandates, and transactions)
 
 ### Merchant Backend Features
+
 - 📦 **Full CRUD product management** via REST API
 - 🗄️ **SQLite database persistence** for products and logs
 - 🔌 **UCP-compliant REST API** with discovery endpoint
@@ -837,6 +889,7 @@ The chat backend will:
 - 🗑️ **Clear logs feature** for dashboard cleanup
 
 ### Frontend Features
+
 - ⚛️ **React + TypeScript + Tailwind CSS** modern stack
 - 🎨 **Modern, responsive UI** with Lucide icons
 - 🔄 **Real-time updates** via Vite HMR
@@ -846,6 +899,7 @@ The chat backend will:
 - 📦 **Product grid display** with add-to-cart functionality
 
 ### Security & Payment Features
+
 - 🔐 **WebAuthn/FIDO2 passkeys** - No passwords, biometric auth
 - 🔒 **Encrypted card storage** - AES-256 Fernet encryption
 - 🎫 **Token-based payments** - 16-digit numeric tokens + cryptograms
@@ -858,6 +912,7 @@ The chat backend will:
 ## 🔧 Configuration
 
 ### Chat Backend (.env)
+
 ```env
 OLLAMA_URL=http://192.168.86.41:11434
 OLLAMA_MODEL=qwen3:8b
@@ -867,6 +922,7 @@ MERCHANT_BACKEND_URL=http://localhost:8453
 ```
 
 ### Merchant Backend (.env)
+
 ```env
 DATABASE_URL=sqlite+aiosqlite:///./merchant.db
 HOST=0.0.0.0
@@ -878,12 +934,12 @@ MERCHANT_URL=http://localhost:8453
 
 ## 📊 Port Allocation
 
-| Service            | Port | Type         | Purpose                    |
-|--------------------|------|--------------|----------------------------|
-| Chat Frontend      | 8450 | Vite Dev     | Customer interface (chat.abhinava.xyz) |
-| Merchant Portal    | 8451 | Vite Dev     | Admin interface (app.abhinava.xyz)     |
-| Chat Backend       | 8452 | FastAPI      | UCP Client + AI Agent      |
-| Merchant Backend   | 8453 | FastAPI      | UCP Server + Product DB    |
+| Service          | Port | Type     | Purpose                                |
+| ---------------- | ---- | -------- | -------------------------------------- |
+| Chat Frontend    | 8450 | Vite Dev | Customer interface (chat.abhinava.xyz) |
+| Merchant Portal  | 8451 | Vite Dev | Admin interface (app.abhinava.xyz)     |
+| Chat Backend     | 8452 | FastAPI  | UCP Client + AI Agent                  |
+| Merchant Backend | 8453 | FastAPI  | UCP Server + Product DB                |
 
 ## 🔐 Production Deployment
 
@@ -920,6 +976,7 @@ Log locations are displayed when you run `./start-split.sh`.
 ## 🐛 Troubleshooting
 
 ### Port Conflicts
+
 ```bash
 # Check what's using a port
 lsof -i :8450
@@ -930,6 +987,7 @@ kill -9 $(lsof -ti:8450)
 ```
 
 ### UCP Discovery Fails
+
 ```bash
 # Verify merchant backend is running
 curl http://localhost:8453/health
@@ -939,6 +997,7 @@ curl http://localhost:8453/.well-known/ucp
 ```
 
 ### Ollama Connection Issues
+
 ```bash
 # Test Ollama connection
 curl http://192.168.86.41:11434/api/tags
