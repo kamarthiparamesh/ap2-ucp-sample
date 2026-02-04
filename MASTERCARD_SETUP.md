@@ -5,6 +5,7 @@ This guide will help you set up Mastercard API credentials once you receive them
 ## Prerequisites
 
 You should have received:
+
 1. **Consumer Key** (also called API Key)
 2. **Signing Key File** (.p12 or .pem format)
 3. **Signing Key Password** (if applicable)
@@ -17,7 +18,7 @@ If you received a `.p12` file, convert it to `.pem` format:
 
 ```bash
 # Navigate to chat-backend directory
-cd /home/coder/WorkingSpace/ucp-sample/enhanced-app/chat-backend
+cd chat-backend
 
 # Create a keys directory
 mkdir -p keys
@@ -43,7 +44,7 @@ chmod 600 keys/mastercard-signing-key.pem
 Edit the chat backend `.env` file:
 
 ```bash
-nano /home/coder/WorkingSpace/ucp-sample/enhanced-app/chat-backend/.env
+nano chat-backend/.env
 ```
 
 Update these variables:
@@ -56,7 +57,7 @@ MASTERCARD_ENABLED=true
 MASTERCARD_CONSUMER_KEY=your_consumer_key_here
 
 # Path to signing key (use absolute path)
-MASTERCARD_SIGNING_KEY_PATH=/home/coder/WorkingSpace/ucp-sample/enhanced-app/chat-backend/keys/mastercard-signing-key.pem
+MASTERCARD_SIGNING_KEY_PATH=chat-backend/keys/mastercard-signing-key.pem
 
 # Sandbox mode (set to false for production)
 MASTERCARD_SANDBOX=true
@@ -69,10 +70,11 @@ Save and exit (Ctrl+X, then Y, then Enter).
 Check that the signing key is readable:
 
 ```bash
-cat /home/coder/WorkingSpace/ucp-sample/enhanced-app/chat-backend/keys/mastercard-signing-key.pem
+cat chat-backend/keys/mastercard-signing-key.pem
 ```
 
 You should see something like:
+
 ```
 -----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...
@@ -83,7 +85,6 @@ MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...
 ### 4. Restart the Application
 
 ```bash
-cd /home/coder/WorkingSpace/ucp-sample/enhanced-app
 
 # Stop all services
 ./stop-split.sh
@@ -101,11 +102,13 @@ tail -f logs/chat-backend.log | grep -i mastercard
 ```
 
 You should see:
+
 ```
 Mastercard API client initialized successfully (sandbox mode)
 ```
 
 If you see:
+
 ```
 Mastercard API integration is disabled (MASTERCARD_ENABLED=false)
 ```
@@ -113,6 +116,7 @@ Mastercard API integration is disabled (MASTERCARD_ENABLED=false)
 Then the `MASTERCARD_ENABLED` flag is not set to `true`.
 
 If you see:
+
 ```
 Mastercard API enabled but credentials not configured
 ```
@@ -129,6 +133,7 @@ tail -f logs/chat-backend.log | grep -i "tokeniz"
 ```
 
 You should see:
+
 ```
 Tokenizing card for user user@example.com with Mastercard API
 Card tokenized successfully for user@example.com: DWSPMC000...
@@ -149,6 +154,7 @@ tail -f logs/chat-backend.log | grep -i "mastercard auth"
 **Problem**: OAuth signature verification failed
 
 **Solutions**:
+
 - Verify the consumer key is correct
 - Ensure signing key is in PEM format
 - Check that the signing key matches the consumer key
@@ -159,6 +165,7 @@ tail -f logs/chat-backend.log | grep -i "mastercard auth"
 **Problem**: Card tokenization API returned an error
 
 **Solutions**:
+
 - Check sandbox credentials are valid
 - Verify you have access to MDES API in Mastercard portal
 - Check logs for specific error message
@@ -169,6 +176,7 @@ tail -f logs/chat-backend.log | grep -i "mastercard auth"
 **Problem**: Logs show "Mastercard API integration is disabled"
 
 **Solutions**:
+
 - Verify `MASTERCARD_ENABLED=true` (not "True" or "TRUE")
 - Check `.env` file has no spaces around `=`
 - Restart the application after changing `.env`
@@ -179,6 +187,7 @@ tail -f logs/chat-backend.log | grep -i "mastercard auth"
 **Problem**: "Signing key not found at /path/to/key.pem"
 
 **Solutions**:
+
 - Use absolute path, not relative path
 - Verify file exists: `ls -la /path/to/key.pem`
 - Check file permissions: `chmod 600 /path/to/key.pem`
@@ -187,10 +196,10 @@ tail -f logs/chat-backend.log | grep -i "mastercard auth"
 
 ### File Locations
 
-- **Environment Config**: `/home/coder/WorkingSpace/ucp-sample/enhanced-app/chat-backend/.env`
-- **Signing Key**: `/home/coder/WorkingSpace/ucp-sample/enhanced-app/chat-backend/keys/mastercard-signing-key.pem`
-- **Logs**: `/home/coder/WorkingSpace/ucp-sample/enhanced-app/logs/chat-backend.log`
-- **Mastercard Client**: `/home/coder/WorkingSpace/ucp-sample/enhanced-app/chat-backend/mastercard_client.py`
+- **Environment Config**: `chat-backend/.env`
+- **Signing Key**: `chat-backend/keys/mastercard-signing-key.pem`
+- **Logs**: `logs/chat-backend.log`
+- **Mastercard Client**: `chat-backend/mastercard_client.py`
 
 ### Environment Variables
 
@@ -220,7 +229,6 @@ tail -f logs/chat-backend.log
 ### Restart Commands
 
 ```bash
-cd /home/coder/WorkingSpace/ucp-sample/enhanced-app
 
 # Stop services
 ./stop-split.sh
@@ -248,10 +256,12 @@ cd /home/coder/WorkingSpace/ucp-sample/enhanced-app
 ## Support
 
 For detailed documentation, see:
+
 - [Mastercard Integration Guide](MASTERCARD_INTEGRATION.md)
 - [Main README](README.md)
 
 For Mastercard API issues:
+
 - [Mastercard Developer Portal](https://developer.mastercard.com/)
 - [Support](https://developer.mastercard.com/support)
 

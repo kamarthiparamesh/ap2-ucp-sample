@@ -5,6 +5,7 @@
 I have successfully integrated Mastercard's Card on File (CoF) Tokenization and Secure Card on File (SCoF) Authentication APIs into your Enhanced Business Agent chat application.
 
 **Key Points:**
+
 - ✅ Integration is **optional** and **disabled by default**
 - ✅ **Zero impact** on existing functionality when disabled
 - ✅ Only affects **chat backend** - merchant frontend/backend unchanged
@@ -18,15 +19,18 @@ I have successfully integrated Mastercard's Card on File (CoF) Tokenization and 
 A complete Python client implementing:
 
 **Tokenization Client:**
+
 - `tokenize_card()` - Convert card numbers to network tokens
 - `detokenize()` - Retrieve original card details (restricted)
 - `get_token_status()` - Check token status
 
 **Authentication Client:**
+
 - `initiate_authentication()` - Start authentication for payment
 - `verify_authentication()` - Verify user-provided codes
 
 **OAuth 1.0a Signer:**
+
 - Automatic request signing with RSA-SHA256
 - Body hash verification
 - Nonce and timestamp generation
@@ -34,6 +38,7 @@ A complete Python client implementing:
 ### 2. Database Extensions
 
 **PaymentCard Model** - Added fields:
+
 ```python
 mastercard_token           # Network token from Mastercard
 mastercard_token_ref       # Token unique reference
@@ -43,6 +48,7 @@ is_tokenized               # Boolean flag
 ```
 
 **MastercardAuthenticationChallenge Model** - New table:
+
 - Tracks authentication challenges
 - Stores challenge ID, method, status
 - Manages verification attempts
@@ -51,6 +57,7 @@ is_tokenized               # Boolean flag
 ### 3. Integration Points
 
 **User Registration Flow:**
+
 ```
 1. User registers → Passkey created
 2. Default card created (5123 1212 2232 5678)
@@ -60,6 +67,7 @@ is_tokenized               # Boolean flag
 ```
 
 **Payment Flow:**
+
 ```
 1. User confirms checkout → Passkey signature
 2. [IF ENABLED & TOKENIZED] Initiate Mastercard authentication
@@ -72,6 +80,7 @@ is_tokenized               # Boolean flag
 ### 4. New API Endpoints
 
 **POST /api/payment/verify-mastercard-auth**
+
 - Verifies Mastercard authentication challenges
 - Processes verification codes
 - Continues payment after successful verification
@@ -121,6 +130,7 @@ MASTERCARD_SANDBOX=true
 ## How It Works
 
 ### When DISABLED (default)
+
 - App behaves exactly as before
 - Cards encrypted with Fernet (AES-256)
 - WebAuthn passkey authentication
@@ -128,6 +138,7 @@ MASTERCARD_SANDBOX=true
 - Simulated OTP challenges
 
 ### When ENABLED
+
 - All of the above, PLUS:
 - Cards tokenized during registration
 - Tokens stored alongside encrypted cards
@@ -160,12 +171,12 @@ MASTERCARD_SANDBOX=true
 ## Testing Instructions
 
 ### Without Mastercard (Current State)
+
 ```bash
 # Ensure disabled in .env
 MASTERCARD_ENABLED=false
 
 # Restart app
-cd /home/coder/WorkingSpace/ucp-sample/enhanced-app
 ./stop-split.sh && ./start-split.sh
 
 # Register and pay as normal
@@ -173,6 +184,7 @@ cd /home/coder/WorkingSpace/ucp-sample/enhanced-app
 ```
 
 ### With Mastercard (After Credentials)
+
 ```bash
 # 1. Add credentials to chat-backend/.env
 MASTERCARD_ENABLED=true
@@ -195,18 +207,21 @@ tail -f logs/chat-backend.log | grep -i mastercard
 ## Files Modified
 
 ### New Files
+
 - `chat-backend/mastercard_client.py` (600+ lines)
 - `MASTERCARD_INTEGRATION.md`
 - `MASTERCARD_SETUP.md`
 - `MASTERCARD_SUMMARY.md`
 
 ### Modified Files
+
 - `chat-backend/database.py` - Added Mastercard fields and model
 - `chat-backend/main.py` - Integrated tokenization and authentication
 - `chat-backend/.env` - Added Mastercard configuration
 - `README.md` - Added Mastercard feature documentation
 
 ### Unchanged
+
 - All merchant backend files
 - All frontend files
 - UCP/AP2 protocol implementations
@@ -236,6 +251,7 @@ tail -f logs/chat-backend.log | grep -i mastercard
 ### Production Deployment
 
 Before going to production:
+
 - Switch `MASTERCARD_SANDBOX=false`
 - Use production credentials
 - Implement proper key management (AWS KMS, HashiCorp Vault)
@@ -246,11 +262,13 @@ Before going to production:
 ## API Endpoints Summary
 
 ### Existing Endpoints (Unchanged)
+
 - `POST /api/auth/register` - Now includes tokenization
 - `POST /api/payment/confirm-checkout` - Now includes authentication
 - All other endpoints remain identical
 
 ### New Endpoints
+
 - `POST /api/payment/verify-mastercard-auth` - Verify challenges
 
 ## Architecture Diagram
@@ -318,22 +336,26 @@ Before going to production:
 ## Benefits
 
 ### Security
+
 - Network tokens instead of card numbers
 - Mastercard-verified authentication
 - Industry-standard OAuth 1.0a
 - Multi-layered security (passkeys + tokens + auth)
 
 ### Compliance
+
 - PCI DSS benefits (tokens not in scope)
 - Reduced liability
 - Audit trail in database
 
 ### User Experience
+
 - Seamless integration
 - Optional additional security
 - Familiar Mastercard verification
 
 ### Flexibility
+
 - Easy to enable/disable
 - Sandbox for testing
 - Production-ready architecture
@@ -341,16 +363,19 @@ Before going to production:
 ## Support
 
 **Documentation:**
+
 - [Full Integration Guide](MASTERCARD_INTEGRATION.md)
 - [Quick Setup Guide](MASTERCARD_SETUP.md)
 - [Main README](README.md)
 
 **Mastercard Resources:**
+
 - [Developer Portal](https://developer.mastercard.com/)
 - [Card on File API](https://developer.mastercard.com/mastercard-checkout-solutions/documentation/use-cases/card-on-file/)
 - [Secure Card on File API](https://developer.mastercard.com/mastercard-checkout-solutions/documentation/token-authentication/secure-card-on-file/by-mastercard/use-case1/)
 
 **Code Files:**
+
 - [mastercard_client.py](chat-backend/mastercard_client.py) - Main implementation
 - [database.py](chat-backend/database.py) - Data models
 - [main.py](chat-backend/main.py) - Integration points
@@ -360,6 +385,7 @@ Before going to production:
 ## Summary
 
 The Mastercard integration is **complete, tested, and ready to use**. It adds enterprise-grade card tokenization and authentication while maintaining:
+
 - ✅ **Zero breaking changes** to existing functionality
 - ✅ **Optional opt-in** with simple configuration
 - ✅ **Graceful fallback** on errors

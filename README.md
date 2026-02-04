@@ -605,7 +605,7 @@ headers["Authorization"] = f'OAuth {format_oauth_params(oauth_params)}'
 **2. Configure environment:**
 
 ```bash
-# Edit enhanced-app/chat-backend/.env
+# Edit chat-backend/.env
 MASTERCARD_ENABLED=true
 MASTERCARD_CONSUMER_KEY=your_consumer_key_here
 MASTERCARD_SIGNING_KEY_PATH=/absolute/path/to/signing-key.pem
@@ -618,7 +618,7 @@ MASTERCARD_SANDBOX=true
 ./stop-split.sh && ./start-split.sh
 
 # Watch logs for Mastercard activity
-tail -f enhanced-app/chat-backend/chat-backend.log | grep -i mastercard
+tail -f chat-backend/chat-backend.log | grep -i mastercard
 ```
 
 **4. Expected log output:**
@@ -744,7 +744,7 @@ For complete Mastercard integration documentation, see:
    **To enable:**
 
    ```bash
-   # Edit enhanced-app/chat-backend/.env
+   # Edit chat-backend/.env
    MASTERCARD_ENABLED=true
    MASTERCARD_CONSUMER_KEY=your_consumer_key_from_mastercard_portal
    MASTERCARD_SIGNING_KEY_PATH=/absolute/path/to/signing-key.pem
@@ -784,8 +784,8 @@ If you encounter database errors (like "table has no column"), the database sche
 ./stop-split.sh
 
 # Remove old databases
-rm enhanced-app/chat-backend/chat_app.db
-rm enhanced-app/merchant-backend/merchant.db
+rm chat-backend/chat_app.db
+rm merchant-backend/merchant.db
 
 # Restart services (databases will be recreated automatically)
 ./start-split.sh
@@ -803,47 +803,46 @@ If you see `ModuleNotFoundError: No module named 'httpx'` or similar errors, ens
 ## 📁 Project Structure
 
 ```
-ucp-sample/
+ap2-ucp-sample/
 ├── start-split.sh            # Start all services (with venv activation)
 ├── stop-split.sh             # Stop all services cleanly
 │
-└── enhanced-app/
-    ├── chat-backend/              # UCP Client Backend
-    │   ├── main.py               # FastAPI application
-    │   ├── ollama_agent.py       # LLM-powered agent
-    │   ├── ucp_client.py         # UCP REST client
-    │   ├── database.py           # User credentials & payment cards
-    │   ├── payment_utils.py      # WebAuthn, encryption, OTP
-    │   ├── ap2_client.py         # AP2 consumer agent client
-    │   ├── mastercard_client.py  # Optional Mastercard integration
-    │   ├── .env                  # Configuration
-    │   ├── pyproject.toml        # Python dependencies
-    │   ├── venv/                 # Python virtual environment
-    │   └── chat_app.db           # SQLite database (auto-created)
-    │
-    ├── merchant-backend/          # UCP Server Backend
-    │   ├── main.py               # FastAPI application with UCP
-    │   ├── database.py           # SQLAlchemy models (products)
-    │   ├── .env                  # Configuration
-    │   ├── pyproject.toml        # Python dependencies
-    │   ├── venv/                 # Python virtual environment
-    │   └── merchant.db           # SQLite database (auto-created)
-    │
-    ├── frontend/
-    │   ├── chat/                 # Chat Frontend (Port 8450)
-    │   │   ├── src/
-    │   │   │   ├── App.tsx      # React application
-    │   │   │   └── RegisterPage.tsx  # Passkey registration
-    │   │   └── vite.config.ts   # Proxy to chat-backend
-    │   │
-    │   └── merchant-portal/      # Admin Frontend (Port 8451)
-    │       ├── src/
-    │       │   └── App.tsx      # React application
-    │       └── vite.config.ts   # Proxy to merchant-backend
-    │
-    ├── README.md                 # This file
-    ├── MASTERCARD_INTEGRATION.md # Mastercard API setup guide
-    └── UCP-KNOWLEDGE-BASE.md     # UCP protocol documentation
+├── chat-backend/              # UCP Client Backend
+│   ├── main.py               # FastAPI application
+│   ├── ollama_agent.py       # LLM-powered agent
+│   ├── ucp_client.py         # UCP REST client
+│   ├── database.py           # User credentials & payment cards
+│   ├── payment_utils.py      # WebAuthn, encryption, OTP
+│   ├── ap2_client.py         # AP2 consumer agent client
+│   ├── mastercard_client.py  # Optional Mastercard integration
+│   ├── .env                  # Configuration
+│   ├── pyproject.toml        # Python dependencies
+│   ├── venv/                 # Python virtual environment
+│   └── chat_app.db           # SQLite database (auto-created)
+│
+├── merchant-backend/          # UCP Server Backend
+│   ├── main.py               # FastAPI application with UCP
+│   ├── database.py           # SQLAlchemy models (products)
+│   ├── .env                  # Configuration
+│   ├── pyproject.toml        # Python dependencies
+│   ├── venv/                 # Python virtual environment
+│   └── merchant.db           # SQLite database (auto-created)
+│
+├── frontend/
+│   ├── chat/                 # Chat Frontend (Port 8450)
+│   │   ├── src/
+│   │   │   ├── App.tsx      # React application
+│   │   │   └── RegisterPage.tsx  # Passkey registration
+│   │   └── vite.config.ts   # Proxy to chat-backend
+│   │
+│   └── merchant-portal/      # Admin Frontend (Port 8451)
+│       ├── src/
+│       │   └── App.tsx      # React application
+│       └── vite.config.ts   # Proxy to merchant-backend
+│
+├── README.md                 # This file
+├── MASTERCARD_INTEGRATION.md # Mastercard API setup guide
+└── UCP-KNOWLEDGE-BASE.md     # UCP protocol documentation
 ```
 
 ## 🔍 Testing UCP Communication
@@ -988,16 +987,16 @@ View real-time logs (created by `start-split.sh`):
 
 ```bash
 # Chat Backend
-tail -f enhanced-app/chat-backend/chat-backend.log
+tail -f chat-backend/chat-backend.log
 
 # Merchant Backend
-tail -f enhanced-app/merchant-backend/merchant-backend.log
+tail -f merchant-backend/merchant-backend.log
 
 # Chat Frontend
-tail -f enhanced-app/frontend/chat/chat-frontend.log
+tail -f frontend/chat/chat-frontend.log
 
 # Merchant Portal
-tail -f enhanced-app/frontend/merchant-portal/merchant-portal.log
+tail -f frontend/merchant-portal/merchant-portal.log
 ```
 
 Log locations are displayed when you run `./start-split.sh`.

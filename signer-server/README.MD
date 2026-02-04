@@ -334,7 +334,7 @@ PORT=8454
 ## 🚀 Running the Signer Service
 
 ```bash
-cd enhanced-app/signer-server
+cd signer-server
 ./start.sh
 ```
 
