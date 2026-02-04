@@ -46,6 +46,7 @@ The application is split into two independent backends that communicate via UCP:
                                                 ┌─────────────|────────────────
                                                 │ Trusted Service (Port 8454)  │
                                                 │ ===========================  │
+                                                │ • Typescript                 │
                                                 │ • DID:web Wallet Management  │
                                                 │ • JWT-VC Signing (Affinidi)  │
                                                 │ • Credential Verification    │
@@ -945,6 +946,19 @@ The chat backend will:
 - 📝 **Request/Response logging** for UCP and AP2 calls
 - 🔍 **Real-time monitoring** of payment flows
 - 🗑️ **Clear logs feature** for dashboard cleanup
+
+### Trusted Service Features
+
+- 🆔 **DID:web wallet creation and management** using Affinidi TDK
+- 🔐 **JWT-VC signing** for verifiable credentials (ecdsa_secp256k1_sha256)
+- ✅ **Credential verification** with Affinidi verification API
+- 🔄 **Stateless design** supporting multiple domains
+- 🚀 **TypeScript implementation** with full type safety
+- 📡 **RESTful API** with Express.js framework
+- 🔑 **Automatic wallet discovery** - reuses existing wallets per domain
+- 📋 **Structured logging** with Winston for debugging
+- 🏥 **Health check endpoint** for monitoring
+- 🧪 **Built-in test suite** for service validation
 
 ### Frontend Features
 
