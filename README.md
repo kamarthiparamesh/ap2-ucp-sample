@@ -816,6 +816,7 @@ If you see `ModuleNotFoundError: No module named 'httpx'` or similar errors, ens
 ap2-ucp-sample/
 ├── start-split.sh            # Start all services (with venv activation)
 ├── stop-split.sh             # Stop all services cleanly
+├── clean.sh                  # Clean build artifacts and dependencies
 │
 ├── chat-backend/              # UCP Client Backend
 │   ├── main.py               # FastAPI application
@@ -833,10 +834,27 @@ ap2-ucp-sample/
 ├── merchant-backend/          # UCP Server Backend
 │   ├── main.py               # FastAPI application with UCP
 │   ├── database.py           # SQLAlchemy models (products)
+│   ├── merchant_payment_agent.py  # AP2 merchant agent
+│   ├── loyalty_agent.py      # Loyalty credential management
+│   ├── signer_client.py      # Trusted Service client
 │   ├── .env                  # Configuration
 │   ├── pyproject.toml        # Python dependencies
 │   ├── venv/                 # Python virtual environment
 │   └── merchant.db           # SQLite database (auto-created)
+│
+├── trusted-service/           # Affinidi TDK Service (TypeScript)
+│   ├── src/
+│   │   ├── server.ts         # Express server & API endpoints
+│   │   ├── affinidi-service.ts  # Affinidi TDK wallet operations
+│   │   ├── types.ts          # TypeScript type definitions
+│   │   ├── logger.ts         # Winston logger configuration
+│   │   └── test-signer.ts    # Test script
+│   ├── dist/                 # Compiled JavaScript output
+│   ├── package.json          # NPM dependencies and scripts
+│   ├── tsconfig.json         # TypeScript configuration
+│   ├── .env                  # Affinidi credentials (not in git)
+│   ├── start.sh              # Startup script
+│   └── README.md             # Setup documentation
 │
 ├── frontend/
 │   ├── chat/                 # Chat Frontend (Port 8450)
@@ -849,6 +867,8 @@ ap2-ucp-sample/
 │       ├── src/
 │       │   └── App.tsx      # React application
 │       └── vite.config.ts   # Proxy to merchant-backend
+│
+├── logs/                     # Service logs (auto-created)
 │
 ├── README.md                 # This file
 ├── MASTERCARD_INTEGRATION.md # Mastercard API setup guide
