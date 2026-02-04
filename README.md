@@ -679,7 +679,15 @@ For complete Mastercard integration documentation, see:
    PORT=8453
    ```
 
-3. **Set up ngrok for merchant backend** (required for external access)
+3. **Configure Trusted Service with Affinidi credentials**
+
+   The Trusted Service requires Affinidi Personal Access Token (PAT) credentials. Follow the detailed setup guide in [trusted-service/README.md](trusted-service/README.md) to:
+   - Create a Personal Access Token (PAT) using Affinidi CLI
+   - Configure the `.env` file with `PROJECT_ID`, `TOKEN_ID`, `PASSPHRASE`, and `PRIVATE_KEY`
+
+   > **Important:** This step is mandatory before starting the services. The Trusted Service handles DID:web wallet creation and JWT-VC signing using Affinidi TDK.
+
+4. **Set up ngrok for merchant backend** (required for external access)
 
    Create an ngrok tunnel with your domain pointing to the merchant backend:
 
@@ -696,7 +704,7 @@ For complete Mastercard integration documentation, see:
 
    > **Note:** Replace `marmot-suited-muskrat.ngrok-free.app` with your actual ngrok domain.
 
-4. **Start all services**
+5. **Start all services**
 
    ```bash
    ./start-split.sh
@@ -711,21 +719,21 @@ For complete Mastercard integration documentation, see:
    - Start Merchant Portal (8451) - Admin Interface
    - Create log files for each service
 
-5. **Access the applications**
+6. **Access the applications**
    - **Chat Interface**: http://localhost:8450 (https://chat.abhinava.xyz)
    - **Merchant Portal**: http://localhost:8451 (https://app.abhinava.xyz)
    - **Chat Backend API**: http://localhost:8452/docs
    - **Merchant Backend API**: http://localhost:8453/docs
    - **Trusted Service API**: http://localhost:8454
 
-6. **Register your first user**
+7. **Register your first user**
    - Visit http://localhost:8450
    - Click "Register" button
    - Enter your email and name
    - Create a passkey using your device's biometric authentication
    - A default Mastercard (ending in 5678) will be automatically added
 
-7. **Stop all services**
+8. **Stop all services**
 
    When you're done, stop all running services:
 
@@ -733,7 +741,7 @@ For complete Mastercard integration documentation, see:
    ./stop-split.sh
    ```
 
-8. **[OPTIONAL] Enable Mastercard Integration**
+9. **[OPTIONAL] Enable Mastercard Integration**
 
    The application supports optional Mastercard Card on File tokenization and Secure Card on File authentication. This is **disabled by default** and the app works fully without it.
 
@@ -761,10 +769,10 @@ For complete Mastercard integration documentation, see:
    - API endpoint reference
    - Testing and troubleshooting
 
-9. **Stop all services**
-   ```bash
-   ./stop-split.sh
-   ```
+10. **Stop all services**
+    ```bash
+    ./stop-split.sh
+    ```
 
 ### Troubleshooting
 
