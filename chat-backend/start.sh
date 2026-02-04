@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Merchant Backend Startup Script
-# Starts the UCP-compliant merchant backend with Affinidi wallet support
+# Chat Backend Startup Script
+# Starts the AI shopping assistant with UCP client
 
 set -e
 
@@ -10,7 +10,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VENV_PATH="$SCRIPT_DIR/.venv"
 
 echo "============================================"
-echo "  Merchant Backend (UCP Server)"
+echo "  Chat Backend (UCP Client)"
 echo "============================================"
 echo ""
 
@@ -25,9 +25,9 @@ check_port() {
     fi
 }
 
-# Check and clear port 8453
-echo "Checking port 8453..."
-check_port 8453
+# Check and clear port 8452
+echo "Checking port 8452..."
+check_port 8452
 
 # Check if virtual environment exists and is valid
 if [ ! -f "$VENV_PATH/bin/activate" ]; then
@@ -44,22 +44,21 @@ source "$VENV_PATH/bin/activate"
 echo "Installing dependencies..."
 pip install -q --upgrade pip
 
-# Install Affinidi packages first (they require pydantic v1)
-pip install -q affinidi-tdk-wallets-client affinidi-tdk-auth-provider
-
-# Install other packages compatible with pydantic v1
-# FastAPI 0.95.x is the last version compatible with pydantic v1
+# Install chat backend dependencies
 pip install -q -r <(python3 -c "
 import sys
 deps = [
-    'fastapi>=0.95.0,<0.100.0',
+    'fastapi>=0.109.0',
     'uvicorn[standard]>=0.38.0',
-    'pydantic<2.0.0,>=1.10.5',
-    'sqlalchemy>=2.0.0',
-    'aiosqlite>=0.19.0',
+    'pydantic[email]>=2.12.0',
     'python-dotenv>=1.0.0',
     'httpx>=0.26.0',
+    'langchain-ollama>=0.1.0',
+    'langchain-core>=0.2.0',
+    'sqlalchemy>=2.0.0',
+    'aiosqlite>=0.19.0',
     'cryptography>=41.0.0',
+    'email_validator>=2.0.0',
     'greenlet>=3.0.0',
 ]
 for dep in deps:
@@ -67,14 +66,13 @@ for dep in deps:
 ")
 
 echo ""
-echo "Starting Merchant Backend..."
+echo "Starting Chat Backend..."
 echo "----------------------------"
 
 # Check if .env exists
 if [ ! -f "$SCRIPT_DIR/.env" ]; then
     echo "⚠️  Warning: .env file not found!"
-    echo "    Copy .env.example to .env and configure Affinidi credentials"
-    echo "    The backend will start but Affinidi features will be disabled."
+    echo "    The backend will start with default configuration."
     echo ""
 fi
 

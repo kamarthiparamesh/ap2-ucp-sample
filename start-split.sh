@@ -19,22 +19,23 @@ echo "  with UCP Communication"
 echo "============================================"
 echo ""
 
-# Function to check if a port is in use
+# Function to check if a port is in use and kill process if needed
 check_port() {
     local port=$1
     if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
         echo "⚠️  Port $port is already in use!"
-        echo "    Please stop the process using this port or change the PORT in .env"
-        return 1
+        echo "    Killing existing process and restarting..."
+        lsof -ti :$port | xargs kill -9 2>/dev/null || true
+        sleep 2
+        echo "✓ Port $port cleared"
     fi
-    return 0
 }
 
 # Function to wait for a service to be ready
 wait_for_service() {
     local url=$1
     local name=$2
-    local max_attempts=30
+    local max_attempts=60
     local attempt=0
 
     echo "Waiting for $name to be ready..."
@@ -51,13 +52,13 @@ wait_for_service() {
     return 1
 }
 
-# Check ports
+# Check ports and kill processes if needed
 echo "Checking ports..."
-check_port 8450 || exit 1  # Chat frontend
-check_port 8451 || exit 1  # Merchant portal frontend
-check_port 8452 || exit 1  # Chat backend
-check_port 8453 || exit 1  # Merchant backend
-check_port 8454 || exit 1  # Signer server
+check_port 8450  # Chat frontend
+check_port 8451  # Merchant portal frontend
+check_port 8452  # Chat backend
+check_port 8453  # Merchant backend
+check_port 8454  # Signer server
 
 echo ""
 echo "Step 1: Starting Signer Server (Affinidi TDK)"
@@ -94,43 +95,12 @@ echo "Step 3: Starting Chat Backend (UCP Client)"
 echo "-------------------------------------------"
 cd "$SCRIPT_DIR/chat-backend"
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "venv" ]; then
-    echo "Creating Python virtual environment for chat backend..."
-    python3 -m venv venv
-fi
-
-# Activate virtual environment and install dependencies
-source venv/bin/activate
-echo "Installing chat backend dependencies..."
-pip install -q --upgrade pip
-pip install -q -r <(python3 -c "
-import sys
-deps = [
-    'fastapi>=0.109.0',
-    'uvicorn[standard]>=0.38.0',
-    'pydantic[email]>=2.12.0',
-    'python-dotenv>=1.0.0',
-    'httpx>=0.26.0',
-    'langchain-ollama>=0.1.0',
-    'langchain-core>=0.2.0',
-    'sqlalchemy>=2.0.0',
-    'aiosqlite>=0.19.0',
-    'cryptography>=41.0.0',
-    'email_validator>=2.0.0',
-    'greenlet>=3.0.0',
-]
-for dep in deps:
-    print(dep)
-")
-
-# Start chat backend
+# Start chat backend using its own start.sh
 echo "Starting Chat Backend on port 8452..."
-nohup python3 main.py > "$LOGS_DIR/chat-backend.log" 2>&1 &
+nohup bash start.sh > "$LOGS_DIR/chat-backend.log" 2>&1 &
 CHAT_PID=$!
 echo $CHAT_PID > "$PIDS_DIR/chat-backend.pid"
 echo "✓ Chat Backend started (PID: $CHAT_PID)"
-deactivate
 
 # Wait for chat backend to be ready
 wait_for_service "http://localhost:8452/health" "Chat Backend" || exit 1
