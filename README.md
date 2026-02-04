@@ -1,6 +1,8 @@
 # Enhanced Business Agent - Split Architecture with UCP + AP2
 
-This is a production-ready implementation demonstrating **two separate systems** communicating over the **Universal Commerce Protocol (UCP)** for product discovery and the **Agentic Payment Protocol (AP2)** for secure payment processing.
+Note: This is forked from https://github.com/abhinavasr/ucp-sample
+
+This is a implementation demonstrating **two separate systems** communicating over the **Universal Commerce Protocol (UCP)** for product discovery and the **Agentic Payment Protocol (AP2)** for secure payment processing.
 
 ## 🏗️ Architecture Overview
 
