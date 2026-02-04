@@ -58,22 +58,22 @@ check_port 8450  # Chat frontend
 check_port 8451  # Merchant portal frontend
 check_port 8452  # Chat backend
 check_port 8453  # Merchant backend
-check_port 8454  # Signer server
+check_port 8454  # Trusted Service
 
 echo ""
-echo "Step 1: Starting Signer Server (Affinidi TDK)"
+echo "Step 1: Starting Trusted Service (Affinidi TDK)"
 echo "----------------------------------------------"
-cd "$SCRIPT_DIR/signer-server"
+cd "$SCRIPT_DIR/trusted-service"
 
-# Start signer server using its own start.sh
-echo "Starting Signer Server on port 8454..."
-nohup bash start.sh > "$LOGS_DIR/signer-server.log" 2>&1 &
+# Start Trusted Service using its own start.sh
+echo "Starting Trusted Service on port 8454..."
+nohup bash start.sh > "$LOGS_DIR/trusted-service.log" 2>&1 &
 SIGNER_PID=$!
-echo $SIGNER_PID > "$PIDS_DIR/signer-server.pid"
-echo "✓ Signer Server started (PID: $SIGNER_PID)"
+echo $SIGNER_PID > "$PIDS_DIR/trusted-service.pid"
+echo "✓ Trusted Service started (PID: $SIGNER_PID)"
 
-# Wait for signer server to be ready
-wait_for_service "http://localhost:8454/health" "Signer Server" || exit 1
+# Wait for Trusted Service to be ready
+wait_for_service "http://localhost:8454/health" "Trusted Service" || exit 1
 
 echo ""
 echo "Step 2: Starting Merchant Backend (UCP Server)"
@@ -156,13 +156,13 @@ echo "    - Health:                       http://localhost:8453/health"
 echo "    - UCP Discovery:                http://localhost:8453/.well-known/ucp"
 echo "    - API Docs:                     http://localhost:8453/docs"
 echo ""
-echo "  • Signer Server (Affinidi TDK):   http://localhost:8454"
+echo "  • Trusted Service (Affinidi TDK): http://localhost:8454"
 echo "    - Health:                       http://localhost:8454/health"
 echo "    - DID Generation:               http://localhost:8454/api/did-web-generate"
-echo "    - JWT Signing:                  http://localhost:8454/api/sign-jwt"
+echo "    - JWT Signing:                  http://localhost:8454/api/sign-credential"
 echo ""
 echo "Logs:"
-echo "  • Signer Server:                  $LOGS_DIR/signer-server.log"
+echo "  • Trusted Service:                  $LOGS_DIR/trusted-service.log"
 echo "  • Merchant Backend:               $LOGS_DIR/merchant-backend.log"
 echo "  • Chat Backend:                   $LOGS_DIR/chat-backend.log"
 echo "  • Chat Frontend:                  $LOGS_DIR/chat-frontend.log"
@@ -173,6 +173,6 @@ echo ""
 echo "UCP Architecture:"
 echo "  Chat Frontend (8450) → Chat Backend (8452)"
 echo "                         ↓ (UCP REST)"
-echo "                         Merchant Backend (8453) → Signer Server (8454)"
-echo "  Merchant Portal (8451) → Merchant Backend (8453) → Signer Server (8454)"
+echo "                         Merchant Backend (8453) → Trusted Service (8454)"
+echo "  Merchant Portal (8451) → Merchant Backend (8453) → Trusted Service (8454)"
 echo ""

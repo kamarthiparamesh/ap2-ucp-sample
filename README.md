@@ -44,7 +44,7 @@ The application is split into two independent backends that communicate via UCP:
                └──────────────────────────────┘               │
                                                               │
                                                 ┌─────────────|────────────────
-                                                │ Signer Service (Port 8454)   │
+                                                │ Trusted Service (Port 8454)  │
                                                 │ ===========================  │
                                                 │ • DID:web Wallet Management  │
                                                 │ • JWT-VC Signing (Affinidi)  │
@@ -667,7 +667,7 @@ For complete Mastercard integration documentation, see:
    # Copy environment files from examples
    cp chat-backend/.env.example chat-backend/.env
    cp merchant-backend/.env.example merchant-backend/.env
-   cp signer-server/.env.example signer-server/.env
+   cp trusted-service/.env.example trusted-service/.env
 
    # Edit chat-backend/.env
    OLLAMA_URL=http://192.168.86.41:11434
@@ -706,7 +706,7 @@ For complete Mastercard integration documentation, see:
    - Activate Python virtual environments with all dependencies (httpx, fastapi, etc.)
    - Start Chat Backend (8452) - UCP Client + AP2 Consumer Agent
    - Start Merchant Backend (8453) - UCP Server + AP2 Merchant Agent
-   - Start Signer Server (8454) - DID:web Wallet & Signing Service
+   - Start Trusted Service (8454) - DID:web Wallet & Signing Service (TypeScript)
    - Start Chat Frontend (8450) - Customer Interface
    - Start Merchant Portal (8451) - Admin Interface
    - Create log files for each service
@@ -716,7 +716,7 @@ For complete Mastercard integration documentation, see:
    - **Merchant Portal**: http://localhost:8451 (https://app.abhinava.xyz)
    - **Chat Backend API**: http://localhost:8452/docs
    - **Merchant Backend API**: http://localhost:8453/docs
-   - **Signer Server API**: http://localhost:8454/docs
+   - **Trusted Service API**: http://localhost:8454
 
 6. **Register your first user**
    - Visit http://localhost:8450

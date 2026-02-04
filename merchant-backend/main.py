@@ -125,9 +125,9 @@ async def lifespan(app: FastAPI):
     await seed_initial_data()
 
     # Initialize Signer Client first for DID:web wallet and JWT signing
-    signer_url = os.getenv("SIGNER_URL", "http://localhost:8454")
+    signer_url = os.getenv("TRUSTED_SERVICE_URL", "http://localhost:8454")
     app.state.signer_client = SignerClient(signer_url=signer_url)
-    logger.info(f"Signer Client initialized: {signer_url}")
+    logger.info(f"Trusted Service Client initialized: {signer_url}")
 
     # Initialize AP2 Merchant Payment Agent with signer client
     ollama_url = os.getenv("OLLAMA_URL", "http://192.168.86.41:11434")

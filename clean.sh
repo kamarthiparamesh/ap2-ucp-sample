@@ -66,20 +66,20 @@ if [ -d "$SCRIPT_DIR/merchant-backend/__pycache__" ]; then
     rm -rf "$SCRIPT_DIR/merchant-backend/__pycache__"
 fi
 
-# Clean signer-server
-if [ -d "$SCRIPT_DIR/signer-server/venv" ]; then
-    echo "✓ Removing signer-server/venv/"
-    rm -rf "$SCRIPT_DIR/signer-server/venv"
+# Clean trusted-service
+if [ -d "$SCRIPT_DIR/trusted-service/node_modules" ]; then
+    echo "✓ Removing trusted-service/node_modules/"
+    rm -rf "$SCRIPT_DIR/trusted-service/node_modules"
 fi
 
-if [ -d "$SCRIPT_DIR/signer-server/__pycache__" ]; then
-    echo "✓ Removing signer-server/__pycache__/"
-    rm -rf "$SCRIPT_DIR/signer-server/__pycache__"
+if [ -d "$SCRIPT_DIR/trusted-service/dist" ]; then
+    echo "✓ Removing trusted-service/dist/"
+    rm -rf "$SCRIPT_DIR/trusted-service/dist"
 fi
 
-if [ -d "$SCRIPT_DIR/signer-server/logs" ]; then
-    echo "✓ Removing signer-server/logs/"
-    rm -rf "$SCRIPT_DIR/signer-server/logs"
+if [ -d "$SCRIPT_DIR/trusted-service/logs" ]; then
+    echo "✓ Removing trusted-service/logs/"
+    rm -rf "$SCRIPT_DIR/trusted-service/logs"
 fi
 
 # Clean frontend node_modules

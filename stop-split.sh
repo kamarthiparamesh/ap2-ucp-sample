@@ -40,7 +40,7 @@ stop_service() {
 }
 
 # Stop all services
-stop_service "signer-server"
+stop_service "trusted-service"
 stop_service "merchant-backend"
 stop_service "chat-backend"
 stop_service "chat-frontend"
