@@ -653,24 +653,48 @@ For complete Mastercard integration documentation, see:
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/abhinavasr/ucp-sample.git
-   cd ucp-sample
+   git clone https://github.com/kamarthiparamesh/ap2-ucp-sample.git
+   cd ap2-ucp-sample
    ```
 
 2. **Configure environment**
 
+   Copy the example environment files and configure them:
+
    ```bash
-   # Edit enhanced-app/chat-backend/.env
+   # Copy environment files from examples
+   cp chat-backend/.env.example chat-backend/.env
+   cp merchant-backend/.env.example merchant-backend/.env
+   cp signer-server/.env.example signer-server/.env
+
+   # Edit chat-backend/.env
    OLLAMA_URL=http://192.168.86.41:11434
    OLLAMA_MODEL=qwen3:8b
    MERCHANT_BACKEND_URL=http://localhost:8453
 
-   # Edit enhanced-app/merchant-backend/.env
+   # Edit merchant-backend/.env
    DATABASE_URL=sqlite+aiosqlite:///./merchant.db
    PORT=8453
    ```
 
-3. **Start all services**
+3. **Set up ngrok for merchant backend** (required for external access)
+
+   Create an ngrok tunnel with your domain pointing to the merchant backend:
+
+   ```bash
+   ngrok http --url=marmot-suited-muskrat.ngrok-free.app 8453
+   ```
+
+   Then update the merchant backend environment file:
+
+   ```bash
+   # Edit merchant-backend/.env
+   MERCHANT_DOMAIN=marmot-suited-muskrat.ngrok-free.app
+   ```
+
+   > **Note:** Replace `marmot-suited-muskrat.ngrok-free.app` with your actual ngrok domain.
+
+4. **Start all services**
 
    ```bash
    ./start-split.sh
@@ -680,24 +704,34 @@ For complete Mastercard integration documentation, see:
    - Activate Python virtual environments with all dependencies (httpx, fastapi, etc.)
    - Start Chat Backend (8452) - UCP Client + AP2 Consumer Agent
    - Start Merchant Backend (8453) - UCP Server + AP2 Merchant Agent
+   - Start Signer Server (8454) - DID:web Wallet & Signing Service
    - Start Chat Frontend (8450) - Customer Interface
    - Start Merchant Portal (8451) - Admin Interface
    - Create log files for each service
 
-4. **Access the applications**
+5. **Access the applications**
    - **Chat Interface**: http://localhost:8450 (https://chat.abhinava.xyz)
    - **Merchant Portal**: http://localhost:8451 (https://app.abhinava.xyz)
    - **Chat Backend API**: http://localhost:8452/docs
    - **Merchant Backend API**: http://localhost:8453/docs
+   - **Signer Server API**: http://localhost:8454/docs
 
-5. **Register your first user**
+6. **Register your first user**
    - Visit http://localhost:8450
    - Click "Register" button
    - Enter your email and name
    - Create a passkey using your device's biometric authentication
    - A default Mastercard (ending in 5678) will be automatically added
 
-6. **[OPTIONAL] Enable Mastercard Integration**
+7. **Stop all services**
+
+   When you're done, stop all running services:
+
+   ```bash
+   ./stop-split.sh
+   ```
+
+8. **[OPTIONAL] Enable Mastercard Integration**
 
    The application supports optional Mastercard Card on File tokenization and Secure Card on File authentication. This is **disabled by default** and the app works fully without it.
 
@@ -722,15 +756,10 @@ For complete Mastercard integration documentation, see:
    - Tokenization Logic: [chat-backend/main.py:484-506](chat-backend/main.py#L484-L506)
    - Authentication Logic: [chat-backend/main.py:807-856](chat-backend/main.py#L807-L856)
    - Database Models: [chat-backend/database.py:49-55, 164-193](chat-backend/database.py#L49-L55)
-
-   **Full Documentation:** See [Mastercard Integration Guide](MASTERCARD_INTEGRATION.md) for:
-   - Getting API credentials from developer.mastercard.com
-   - Converting .p12 keys to .pem format
-   - Database schema extensions (payment_cards, mastercard_auth_challenges)
    - API endpoint reference
    - Testing and troubleshooting
 
-7. **Stop all services**
+9. **Stop all services**
    ```bash
    ./stop-split.sh
    ```
