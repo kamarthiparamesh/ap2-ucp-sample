@@ -14,9 +14,26 @@ This is a TypeScript port of the `signer-server` (Python version), providing the
 
 ## Pre-Requisites
 
-### Create Personal Access Token (PAT)
+### Step 1: Setup Affinidi Developer Portal Account
 
-Before running the trusted service, you need to obtain Affinidi credentials from the Affinidi Portal.
+Before running the trusted service, you need to create an Affinidi developer account and upgrade to the Community tier.
+
+1. **Create an Account:**
+   - Visit [portal.affinidi.com](https://portal.affinidi.com)
+   - Sign up for a new account or log in if you already have one
+   - A default project will be automatically created for you after account creation
+
+2. **Upgrade to Community Tier:**
+   - Once logged in, navigate to your project settings
+   - Upgrade your project plan to the Community tier (free tier with extended features)
+   - Follow the upgrade guide: [Upgrading Your Project Plan](https://docs.affinidi.com/dev-tools/affinidi-portal/portal-manage-project/#upgrading-your-project-plan)
+
+> [!IMPORTANT]
+> Community tier is required to access all features needed for this service.
+
+### Step 2: Create Personal Access Token (PAT)
+
+After setting up your Affinidi account, you need to obtain credentials from the Affinidi Portal.
 
 > [!IMPORTANT]
 > Mandatory steps before proceeding to next steps.
@@ -28,13 +45,19 @@ Personal Access Token (PAT) is like a machine user that acts on your behalf to t
 
 **Steps to Create PAT (Personal Access Token):**
 
-1. **Log in to Affinidi CLI:**
+1. **Install Affinidi CLI:**
+
+   ```sh
+   npm install -g @affinidi/cli
+   ```
+
+2. **Log in to Affinidi CLI:**
 
    ```sh
    affinidi start
    ```
 
-2. **Create a token:**
+3. **Create a token:**
 
    ```sh
    affinidi token create-token
