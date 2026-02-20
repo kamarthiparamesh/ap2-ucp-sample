@@ -4,6 +4,25 @@ Note: This is forked from https://github.com/abhinavasr/ucp-sample
 
 This is a implementation demonstrating **two separate systems** communicating over the **Universal Commerce Protocol (UCP)** for product discovery and the **Agentic Payment Protocol (AP2)** for secure payment processing.
 
+## Table of Contents
+
+- [🏗️ Architecture Overview](#architecture-overview)
+- [🔌 UCP Endpoints](#ucp-integration)
+- [🔏 Merchant Authorization JWT-VC](#merchant-authorization-jwt-vc)
+- [💳 AP2 Payment Protocol Integration](#ap2-payment-protocol-integration)
+- [💳 Mastercard Integration Logic (Optional)](#mastercard-integration-logic-optional)
+- [🚀 Quick Start](#quick-start)
+- [📁 Project Structure](#project-structure)
+- [🔍 Testing UCP Communication](#testing-ucp-communication)
+- [🎯 Key Features](#key-features)
+- [🔧 Configuration](#configuration)
+- [📊 Port Allocation](#port-allocation)
+- [🔐 Production Deployment](#production-deployment)
+- [📝 Logs](#logs)
+- [🐛 Troubleshooting](#troubleshooting-1)
+- [🎓 Learning Resources](#learning-resources)
+- [📄 License](#license)
+
 ## 🏗️ Architecture Overview
 
 The application is split into two independent backends that communicate via UCP:
@@ -108,7 +127,7 @@ The application is split into two independent backends that communicate via UCP:
 - **Chat Frontend** (Port 8450): Customer-facing shopping interface with registration, checkout, and passkey auth
 - **Merchant Portal** (Port 8451): Admin interface for product management
 
-## 🔌 UCP Integration
+## 🔌 UCP Endpoints
 
 ### UCP Discovery Endpoint
 
@@ -221,30 +240,9 @@ GET http://localhost:8453/ucp/products/search?limit=50
       "price": 379,
       "image_url": "[\"https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400&h=400&fit=crop&q=80\"]",
       "description": "Crispy salted potato chips"
-    },
-    {
-      "id": "PROD-004",
-      "title": "Baked Sweet Potato Chips",
-      "price": 479,
-      "image_url": "[\"https://images.unsplash.com/photo-1626200655629-cbee9dc8f42e?w=400&h=400&fit=crop&q=80\"]",
-      "description": "Healthy baked sweet potato chips"
-    },
-    {
-      "id": "PROD-005",
-      "title": "Classic Oat Cookies",
-      "price": 599,
-      "image_url": "[\"https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=400&h=400&fit=crop&q=80\"]",
-      "description": "Wholesome oatmeal cookies with raisins"
-    },
-    {
-      "id": "PROD-006",
-      "title": "Nutri-Bar",
-      "price": 299,
-      "image_url": "[\"https://images.unsplash.com/photo-1604480133435-25b9560f4294?w=400&h=400&fit=crop&q=80\"]",
-      "description": "Nutritious energy bar with nuts and fruits"
     }
   ],
-  "total": 6
+  "total": 3
 }
 ```
 
@@ -265,23 +263,9 @@ GET http://localhost:8453/ucp/products/search?q=snack&limit=10
       "price": 379,
       "image_url": "[\"https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400&h=400&fit=crop&q=80\"]",
       "description": "Crispy salted potato chips"
-    },
-    {
-      "id": "PROD-004",
-      "title": "Baked Sweet Potato Chips",
-      "price": 479,
-      "image_url": "[\"https://images.unsplash.com/photo-1626200655629-cbee9dc8f42e?w=400&h=400&fit=crop&q=80\"]",
-      "description": "Healthy baked sweet potato chips"
-    },
-    {
-      "id": "PROD-006",
-      "title": "Nutri-Bar",
-      "price": 299,
-      "image_url": "[\"https://images.unsplash.com/photo-1604480133435-25b9560f4294?w=400&h=400&fit=crop&q=80\"]",
-      "description": "Nutritious energy bar with nuts and fruits"
     }
   ],
-  "total": 3
+  "total": 1
 }
 ```
 
@@ -482,6 +466,101 @@ POST http://localhost:8453/ucp/v1/checkout-sessions/cs_265bcc93810a42e8/complete
 - ✅ **Session Management**: Stateful checkout with status transitions
 - ✅ **OTP Support**: Handles step-up authentication via query parameter
 
+## 🔏 Merchant Authorization JWT-VC
+
+When the consumer agent attaches a payment mandate (PUT checkout session), the merchant backend signs it as a **Verifiable Credential (VC)** using its `DID:web` key via the **Trusted Service**. This signed JWT is returned as `merchant_authorization` and must be verified by the payment processor before releasing funds.
+
+### Who Signs It
+
+The **Merchant** using Trusted Service (Port 8454) signs the `CartMandate` VC on behalf of the merchant using:
+
+- **Algorithm**: `ES256K` (secp256k1 elliptic curve) via Affinidi TDK
+- **Key**: The merchant's `DID:web` key hosted at `/.well-known/did.json`
+- **kid**: `did:web:<merchant-domain>#<key-id>`
+
+### Sample JWT
+
+```
+eyJhbGciOiJFUzI1NksiLCJraWQiOiJkaWQ6d2ViOm1hcm1vdC1zdWl0ZWQtbXVza3JhdC5uZ3Jvay1mcmVlLmFwcCM0M2U4NzliNTQwYjc1NTAxNDdlZDUwZGMzZjU1MmQ3OS01ZThhOGRiZjYxYWE4NmUxIiwidHlwIjoiSldUIn0.eyJleHAiOjE3NzE1NzkwODEsIm5iZiI6MTc3MTU3NTQ4MSwiaXNzIjp7ImlkIjoiZGlkOndlYjptYXJtb3Qtc3VpdGVkLW11c2tyYXQubmdyb2stZnJlZS5hcHAifSwic3ViIjoiY2FydDpjc18yNjViY2M5MzgxMGE0MmU4IiwidmMiOnsiQGNvbnRleHQiOlsiaHR0cHM6Ly93d3cudzMub3JnLzIwMTgvY3JlZGVudGlhbHMvdjEiLCJodHRwczovL2FwMi1wcm90b2NvbC5vcmcvbWFuZGF0ZXMvdjEiXSwidHlwZSI6WyJWZXJpZmlhYmxlQ3JlZGVudGlhbCIsIkNhcnRNYW5kYXRlIl0sImNyZWRlbnRpYWxTdWJqZWN0Ijp7ImlkIjoiY2FydDpjc18yNjViY2M5MzgxMGE0MmU4IiwiY2FydEhhc2giOiJzaGEyNTY6ZDAxOWZmMDBhZDg5YTc5ODlhYzNlNzI5ZjkyNmEzMTFiYWQ1ODliMTEyOGU0MjA5YmQ5NjMzNzM4NjJmYTQ0OSIsIm1lcmNoYW50R3VhcmFudGVlIjoicHJpY2VfbG9ja2VkIiwidG90YWxBbW91bnQiOjMuNzksImN1cnJlbmN5IjoiU0dEIiwibWFuZGF0ZUlkIjoiUE0tREUyODY5RjQ0NkI0NDkyQyJ9fX0.mUouDC7r2ULgmaMfZaFFBqSN4BHNWCieGhGeW-eA4CIIJ0SpidLi4FNBv2FwYzQNP_g7dtcCTT3wnM2spXQ-Wg
+```
+
+### Decoded JWT Header
+
+```json
+{
+  "alg": "ES256K",
+  "kid": "did:web:marmot-suited-muskrat.ngrok-free.app#43e879b540b750147ed50dc3f552d79-5e8a8dbf61aa86e1",
+  "typ": "JWT"
+}
+```
+
+### Decoded JWT Payload
+
+```json
+{
+  "exp": 1771579081,
+  "nbf": 1771575481,
+  "iss": {
+    "id": "did:web:marmot-suited-muskrat.ngrok-free.app"
+  },
+  "sub": "cart:cs_265bcc93810a42e8",
+  "vc": {
+    "@context": [
+      "https://www.w3.org/2018/credentials/v1",
+      "https://ap2-protocol.org/mandates/v1"
+    ],
+    "type": ["VerifiableCredential", "CartMandate"],
+    "credentialSubject": {
+      "id": "cart:cs_265bcc93810a42e8",
+      "cartHash": "sha256:d019ff00ad89a7989ac3e729f926a311bad589b1128e4209bd963373862fa449",
+      "merchantGuarantee": "price_locked",
+      "totalAmount": 3.79,
+      "currency": "SGD",
+      "mandateId": "PM-DE2869F446B4492C"
+    }
+  }
+}
+```
+
+### Key Fields Explained
+
+| Field                                 | Value                                          | Meaning                                     |
+| ------------------------------------- | ---------------------------------------------- | ------------------------------------------- |
+| `iss.id`                              | `did:web:marmot-suited-muskrat.ngrok-free.app` | Merchant's DID — identifies who signed      |
+| `sub`                                 | `cart:cs_265bcc93810a42e8`                     | The checkout session this mandate covers    |
+| `vc.type`                             | `CartMandate`                                  | AP2 mandate type as a Verifiable Credential |
+| `credentialSubject.cartHash`          | `sha256:d019ff...`                             | Hash of cart contents — tamper evidence     |
+| `credentialSubject.merchantGuarantee` | `price_locked`                                 | Merchant guarantees the price won't change  |
+| `credentialSubject.totalAmount`       | `3.79`                                         | Amount the merchant commits to charge       |
+| `credentialSubject.mandateId`         | `PM-DE2869F446B4492C`                          | Links back to the AP2 payment mandate       |
+| `exp` / `nbf`                         | Unix timestamps                                | JWT validity window (1 hour)                |
+
+### How the Payment Processor Verifies It
+
+Before processing the payment, the merchant backend's AP2 agent performs the following checks:
+
+```
+1. Decode the JWT header → extract kid (DID:web key ID)
+2. Resolve DID document from did:web URL
+   └─ GET https://<merchant-domain>/.well-known/did.json
+3. Locate the public key matching the kid in the DID document
+4. Verify the JWT signature using the public key (ES256K)
+5. Check exp / nbf — reject if expired or not yet valid
+6. Verify credentialSubject.cartHash matches the actual cart contents
+7. Verify credentialSubject.totalAmount matches the payment mandate amount
+8. Verify credentialSubject.mandateId matches PM-DE2869F446B4492C
+9. Cross-check user_authorization (passkey signature) against the mandate contents
+10. If all checks pass → proceed to payment processing
+    If any check fails → reject with 400/403
+```
+
+This ensures:
+
+- **Authenticity**: Only the legitimate merchant (holder of the DID:web key) could have signed
+- **Integrity**: Cart contents and total amount cannot be tampered with after signing
+- **Non-repudiation**: The merchant cannot deny having issued the mandate
+- **Freshness**: Expired JWTs are rejected, preventing replay attacks
+
 ## 💳 AP2 Payment Protocol Integration
 
 This application implements the **Agentic Payment Protocol (AP2)** for secure, passkey-authenticated payments.
@@ -518,112 +597,6 @@ Payment Flow (via UCP Checkout):
 16. Chat Backend → Merchant Backend: POST /ucp/v1/checkout-sessions/{id}/complete?otp_code=123456
 17. Merchant Backend: Verify OTP → Process payment → Receipt
 18. Chat Frontend: Show success confirmation in chat history with payment ID
-```
-
-### API Endpoints
-
-#### Chat Backend (Consumer Agent)
-
-```bash
-# Authentication & Registration
-POST /api/auth/challenge           # Get WebAuthn challenge
-POST /api/auth/register            # Register user with passkey + default card
-POST /api/auth/verify-passkey      # Verify passkey signature
-
-# Payment Card Management
-GET /api/payment/cards             # List user's payment cards (masked)
-GET /api/payment/cards/default     # Get default payment card
-
-# Payment Flow (uses UCP checkout internally)
-POST /api/payment/prepare-checkout # Create UCP session + AP2 mandate
-POST /api/payment/confirm-checkout # Sign mandate, complete UCP checkout
-POST /api/payment/verify-otp       # Complete checkout with OTP
-
-# Database Management
-POST /api/database/reset           # Reset database (clear all user data)
-```
-
-#### Merchant Backend (UCP Server + AP2 Merchant Agent)
-
-```bash
-# UCP Checkout Endpoints (wrapping AP2)
-POST   /ucp/v1/checkout-sessions          # Create checkout session
-GET    /ucp/v1/checkout-sessions/{id}     # Get checkout session
-PUT    /ucp/v1/checkout-sessions/{id}     # Update with payment mandate
-POST   /ucp/v1/checkout-sessions/{id}/complete  # Process payment via AP2
-
-# Dashboard API
-GET    /api/dashboard/ucp-logs     # UCP request logs
-GET    /api/dashboard/ap2-logs     # AP2 payment logs
-GET    /api/dashboard/stats        # Dashboard statistics
-DELETE /api/dashboard/clear-logs   # Clear all logs
-```
-
-### AP2 Payment Mandate Structure
-
-```json
-{
-  "payment_mandate_contents": {
-    "payment_mandate_id": "PM-1A2B3C4D5E6F7890",
-    "timestamp": "2026-01-17T10:30:00.000000",
-    "payment_details_id": "REQ-A1B2C3D4E5F6",
-    "payment_details_total": {
-      "label": "Total",
-      "amount": {
-        "currency": "SGD",
-        "value": 15.99
-      }
-    },
-    "payment_response": {
-      "request_id": "REQ-A1B2C3D4E5F6",
-      "method_name": "CARD",
-      "details": {
-        "token": "5342223122345000",
-        "cryptogram": "A3F4E2C8B1D7F9E6A2C5B8D1E4F7A9C3",
-        "card_last_four": "5678",
-        "card_network": "mastercard"
-      },
-      "payer_email": "user@example.com",
-      "payer_name": "John Doe"
-    },
-    "merchant_agent": "merchant-001"
-  },
-  "user_authorization": "base64_encoded_passkey_signature"
-}
-```
-
-### AP2 Payment Receipt
-
-**Success:**
-
-```json
-{
-  "payment_mandate_id": "PM-1A2B3C4D5E6F7890",
-  "payment_id": "PAY-ABC123456789",
-  "amount": { "currency": "SGD", "value": 15.99 },
-  "payment_status": {
-    "status_code": "SUCCESS",
-    "message": "Payment processed successfully"
-  },
-  "timestamp": "2026-01-17T10:30:05.000000"
-}
-```
-
-**OTP Challenge:**
-
-```json
-{
-  "payment_mandate_id": "PM-1A2B3C4D5E6F7890",
-  "payment_status": {
-    "error_message": "OTP_REQUIRED:Additional verification required. Please enter the 6-digit OTP code."
-  },
-  "payment_method_details": {
-    "otp_challenge": {
-      "payment_mandate_id": "PM-1A2B3C4D5E6F7890",
-      "message": "Enter 6-digit OTP for verification"
-    }
-  }
-}
 ```
 
 ### Security Features
@@ -1298,101 +1271,6 @@ curl http://192.168.86.41:11434/api/tags
 
 # Update OLLAMA_URL in chat-backend/.env
 ```
-
-## 🔏 Merchant Authorization JWT-VC
-
-When the consumer agent attaches a payment mandate (PUT checkout session), the merchant backend signs it as a **Verifiable Credential (VC)** using its `DID:web` key via the **Trusted Service**. This signed JWT is returned as `merchant_authorization` and must be verified by the payment processor before releasing funds.
-
-### Who Signs It
-
-The **Merchant** using Trusted Service (Port 8454) signs the `CartMandate` VC on behalf of the merchant using:
-
-- **Algorithm**: `ES256K` (secp256k1 elliptic curve) via Affinidi TDK
-- **Key**: The merchant's `DID:web` key hosted at `/.well-known/did.json`
-- **kid**: `did:web:<merchant-domain>#<key-id>`
-
-### Sample JWT
-
-```
-eyJhbGciOiJFUzI1NksiLCJraWQiOiJkaWQ6d2ViOm1hcm1vdC1zdWl0ZWQtbXVza3JhdC5uZ3Jvay1mcmVlLmFwcCM0M2U4NzliNTQwYjc1NTAxNDdlZDUwZGMzZjU1MmQ3OS01ZThhOGRiZjYxYWE4NmUxIiwidHlwIjoiSldUIn0.eyJleHAiOjE3NzE1NzkwODEsIm5iZiI6MTc3MTU3NTQ4MSwiaXNzIjp7ImlkIjoiZGlkOndlYjptYXJtb3Qtc3VpdGVkLW11c2tyYXQubmdyb2stZnJlZS5hcHAifSwic3ViIjoiY2FydDpjc18yNjViY2M5MzgxMGE0MmU4IiwidmMiOnsiQGNvbnRleHQiOlsiaHR0cHM6Ly93d3cudzMub3JnLzIwMTgvY3JlZGVudGlhbHMvdjEiLCJodHRwczovL2FwMi1wcm90b2NvbC5vcmcvbWFuZGF0ZXMvdjEiXSwidHlwZSI6WyJWZXJpZmlhYmxlQ3JlZGVudGlhbCIsIkNhcnRNYW5kYXRlIl0sImNyZWRlbnRpYWxTdWJqZWN0Ijp7ImlkIjoiY2FydDpjc18yNjViY2M5MzgxMGE0MmU4IiwiY2FydEhhc2giOiJzaGEyNTY6ZDAxOWZmMDBhZDg5YTc5ODlhYzNlNzI5ZjkyNmEzMTFiYWQ1ODliMTEyOGU0MjA5YmQ5NjMzNzM4NjJmYTQ0OSIsIm1lcmNoYW50R3VhcmFudGVlIjoicHJpY2VfbG9ja2VkIiwidG90YWxBbW91bnQiOjMuNzksImN1cnJlbmN5IjoiU0dEIiwibWFuZGF0ZUlkIjoiUE0tREUyODY5RjQ0NkI0NDkyQyJ9fX0.mUouDC7r2ULgmaMfZaFFBqSN4BHNWCieGhGeW-eA4CIIJ0SpidLi4FNBv2FwYzQNP_g7dtcCTT3wnM2spXQ-Wg
-```
-
-### Decoded JWT Header
-
-```json
-{
-  "alg": "ES256K",
-  "kid": "did:web:marmot-suited-muskrat.ngrok-free.app#43e879b540b750147ed50dc3f552d79-5e8a8dbf61aa86e1",
-  "typ": "JWT"
-}
-```
-
-### Decoded JWT Payload
-
-```json
-{
-  "exp": 1771579081,
-  "nbf": 1771575481,
-  "iss": {
-    "id": "did:web:marmot-suited-muskrat.ngrok-free.app"
-  },
-  "sub": "cart:cs_265bcc93810a42e8",
-  "vc": {
-    "@context": [
-      "https://www.w3.org/2018/credentials/v1",
-      "https://ap2-protocol.org/mandates/v1"
-    ],
-    "type": ["VerifiableCredential", "CartMandate"],
-    "credentialSubject": {
-      "id": "cart:cs_265bcc93810a42e8",
-      "cartHash": "sha256:d019ff00ad89a7989ac3e729f926a311bad589b1128e4209bd963373862fa449",
-      "merchantGuarantee": "price_locked",
-      "totalAmount": 3.79,
-      "currency": "SGD",
-      "mandateId": "PM-DE2869F446B4492C"
-    }
-  }
-}
-```
-
-### Key Fields Explained
-
-| Field                                 | Value                                          | Meaning                                     |
-| ------------------------------------- | ---------------------------------------------- | ------------------------------------------- |
-| `iss.id`                              | `did:web:marmot-suited-muskrat.ngrok-free.app` | Merchant's DID — identifies who signed      |
-| `sub`                                 | `cart:cs_265bcc93810a42e8`                     | The checkout session this mandate covers    |
-| `vc.type`                             | `CartMandate`                                  | AP2 mandate type as a Verifiable Credential |
-| `credentialSubject.cartHash`          | `sha256:d019ff...`                             | Hash of cart contents — tamper evidence     |
-| `credentialSubject.merchantGuarantee` | `price_locked`                                 | Merchant guarantees the price won't change  |
-| `credentialSubject.totalAmount`       | `3.79`                                         | Amount the merchant commits to charge       |
-| `credentialSubject.mandateId`         | `PM-DE2869F446B4492C`                          | Links back to the AP2 payment mandate       |
-| `exp` / `nbf`                         | Unix timestamps                                | JWT validity window (1 hour)                |
-
-### How the Payment Processor Verifies It
-
-Before processing the payment, the merchant backend's AP2 agent performs the following checks:
-
-```
-1. Decode the JWT header → extract kid (DID:web key ID)
-2. Resolve DID document from did:web URL
-   └─ GET https://<merchant-domain>/.well-known/did.json
-3. Locate the public key matching the kid in the DID document
-4. Verify the JWT signature using the public key (ES256K)
-5. Check exp / nbf — reject if expired or not yet valid
-6. Verify credentialSubject.cartHash matches the actual cart contents
-7. Verify credentialSubject.totalAmount matches the payment mandate amount
-8. Verify credentialSubject.mandateId matches PM-DE2869F446B4492C
-9. Cross-check user_authorization (passkey signature) against the mandate contents
-10. If all checks pass → proceed to payment processing
-    If any check fails → reject with 400/403
-```
-
-This ensures:
-
-- **Authenticity**: Only the legitimate merchant (holder of the DID:web key) could have signed
-- **Integrity**: Cart contents and total amount cannot be tampered with after signing
-- **Non-repudiation**: The merchant cannot deny having issued the mandate
-- **Freshness**: Expired JWTs are rejected, preventing replay attacks
 
 ## 🎓 Learning Resources
 
