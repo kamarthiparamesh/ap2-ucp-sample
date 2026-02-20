@@ -7,7 +7,7 @@ This is a implementation demonstrating **two separate systems** communicating ov
 ## Table of Contents
 
 - [🏗️ Architecture Overview](#architecture-overview)
-- [🔌 UCP Endpoints](#ucp-integration)
+- [🔌 UCP Endpoints](#ucp-endpoints)
 - [🔏 Merchant Authorization JWT-VC](#merchant-authorization-jwt-vc)
 - [💳 AP2 Payment Protocol Integration](#ap2-payment-protocol-integration)
 - [💳 Mastercard Integration Logic (Optional)](#mastercard-integration-logic-optional)
