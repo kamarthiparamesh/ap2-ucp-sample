@@ -190,8 +190,10 @@ async def search_products(self, query: str = None, limit: int = 10):
 
 The Merchant Backend serves UCP-compliant product data:
 
+**List all products:**
+
 ```bash
-GET http://localhost:8451/ucp/products/search?q=cookies&limit=5
+GET http://localhost:8453/ucp/products/search?limit=50
 ```
 
 **Response:**
@@ -202,54 +204,274 @@ GET http://localhost:8451/ucp/products/search?q=cookies&limit=5
     {
       "id": "PROD-001",
       "title": "Chocochip Cookies",
-      "price": 499, // Price in cents
-      "image_url": "...",
-      "description": "Delicious chocolate chip cookies"
+      "price": 499,
+      "image_url": "[\"https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=400&h=400&fit=crop&q=80\"]",
+      "description": "Delicious chocolate chip cookies, freshly baked"
+    },
+    {
+      "id": "PROD-002",
+      "title": "Fresh Strawberries",
+      "price": 449,
+      "image_url": "[\"https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=400&h=400&fit=crop&q=80\"]",
+      "description": "Sweet and juicy fresh strawberries"
+    },
+    {
+      "id": "PROD-003",
+      "title": "Classic Potato Chips",
+      "price": 379,
+      "image_url": "[\"https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400&h=400&fit=crop&q=80\"]",
+      "description": "Crispy salted potato chips"
+    },
+    {
+      "id": "PROD-004",
+      "title": "Baked Sweet Potato Chips",
+      "price": 479,
+      "image_url": "[\"https://images.unsplash.com/photo-1626200655629-cbee9dc8f42e?w=400&h=400&fit=crop&q=80\"]",
+      "description": "Healthy baked sweet potato chips"
+    },
+    {
+      "id": "PROD-005",
+      "title": "Classic Oat Cookies",
+      "price": 599,
+      "image_url": "[\"https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=400&h=400&fit=crop&q=80\"]",
+      "description": "Wholesome oatmeal cookies with raisins"
+    },
+    {
+      "id": "PROD-006",
+      "title": "Nutri-Bar",
+      "price": 299,
+      "image_url": "[\"https://images.unsplash.com/photo-1604480133435-25b9560f4294?w=400&h=400&fit=crop&q=80\"]",
+      "description": "Nutritious energy bar with nuts and fruits"
     }
   ],
-  "total": 1
+  "total": 6
+}
+```
+
+**Search products by keyword:**
+
+```bash
+GET http://localhost:8453/ucp/products/search?q=snack&limit=10
+```
+
+**Response:**
+
+```json
+{
+  "items": [
+    {
+      "id": "PROD-003",
+      "title": "Classic Potato Chips",
+      "price": 379,
+      "image_url": "[\"https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400&h=400&fit=crop&q=80\"]",
+      "description": "Crispy salted potato chips"
+    },
+    {
+      "id": "PROD-004",
+      "title": "Baked Sweet Potato Chips",
+      "price": 479,
+      "image_url": "[\"https://images.unsplash.com/photo-1626200655629-cbee9dc8f42e?w=400&h=400&fit=crop&q=80\"]",
+      "description": "Healthy baked sweet potato chips"
+    },
+    {
+      "id": "PROD-006",
+      "title": "Nutri-Bar",
+      "price": 299,
+      "image_url": "[\"https://images.unsplash.com/photo-1604480133435-25b9560f4294?w=400&h=400&fit=crop&q=80\"]",
+      "description": "Nutritious energy bar with nuts and fruits"
+    }
+  ],
+  "total": 3
 }
 ```
 
 ### UCP Checkout Sessions (AP2 Integration)
 
-The merchant backend exposes UCP checkout endpoints that wrap AP2 payment processing per the UCP specification:
+The merchant backend exposes UCP checkout endpoints that wrap AP2 payment processing per the UCP specification.
+
+#### Step 1 — Create a checkout session
 
 ```bash
-# Create checkout session
 POST http://localhost:8453/ucp/v1/checkout-sessions
+```
+
+**Request body:**
+
+```json
 {
   "line_items": [
-    {"id": "PROD-001", "sku": "PROD-001", "name": "Cookies", "quantity": 2, "price": 4.99}
+    {
+      "id": "PROD-003",
+      "sku": "PROD-003",
+      "name": "Classic Potato Chips",
+      "quantity": 1,
+      "price": 3.79
+    }
   ],
-  "buyer_email": "user@example.com",
+  "buyer_email": "paramesh.k@affinidi.com",
   "currency": "SGD"
 }
+```
 
-# Response
+**Response (200):**
+
+```json
 {
-  "id": "cs_a1b2c3d4e5f67890",
+  "id": "cs_265bcc93810a42e8",
   "status": "incomplete",
-  "line_items": [...],
-  "totals": {"subtotal": 9.98, "tax": 0.0, "total": 9.98, "currency": "SGD"}
+  "line_items": [
+    {
+      "id": "PROD-003",
+      "sku": "PROD-003",
+      "name": "Classic Potato Chips",
+      "quantity": 1,
+      "price": 3.79
+    }
+  ],
+  "totals": {
+    "subtotal": 3.79,
+    "discount": 0.0,
+    "tax": 0.0,
+    "total": 3.79,
+    "currency": "SGD"
+  },
+  "payment": null,
+  "ap2": null
 }
+```
 
-# Update session with AP2 payment mandate
-PUT http://localhost:8453/ucp/v1/checkout-sessions/{id}
+#### Step 2 — Attach the AP2 payment mandate
+
+```bash
+PUT http://localhost:8453/ucp/v1/checkout-sessions/cs_265bcc93810a42e8
+```
+
+**Request body:**
+
+```json
 {
-  "payment_mandate": {...},  // AP2 payment mandate
-  "user_signature": "..."     // WebAuthn signature
+  "payment_mandate": {
+    "payment_mandate_contents": {
+      "payment_mandate_id": "PM-DE2869F446B4492C",
+      "timestamp": "2026-02-20T08:17:52.169033",
+      "payment_details_id": "REQ-9AAAFBD5C674",
+      "payment_details_total": {
+        "label": "Total",
+        "amount": {
+          "currency": "SGD",
+          "value": 3.79
+        }
+      },
+      "payment_response": {
+        "request_id": "REQ-9AAAFBD5C674",
+        "method_name": "CARD",
+        "details": {
+          "token": "8368650809338264",
+          "token_expiry": "02/29",
+          "cryptogram": "19BA911B7AEF4750968D3B6331F6CC4D",
+          "card_last_four": "5678",
+          "card_network": "mastercard"
+        },
+        "payer_email": "paramesh.k@affinidi.com",
+        "payer_name": "Paramesh K"
+      },
+      "merchant_agent": "merchant-001"
+    },
+    "user_authorization": "MEYCIQDfK1euCsog3pc76L2NGdTfx0Lx7c5uM2-8-jG7zEqaiAIhAP8xcZJ2zMzsvqIWaqXy5B8sbJ0MbGUGgg6S8U6dAQDV"
+  },
+  "user_signature": "MEYCIQDfK1euCsog3pc76L2NGdTfx0Lx7c5uM2-8-jG7zEqaiAIhAP8xcZJ2zMzsvqIWaqXy5B8sbJ0MbGUGgg6S8U6dAQDV"
 }
+```
 
-# Complete checkout (processes payment via AP2)
-POST http://localhost:8453/ucp/v1/checkout-sessions/{id}/complete
-# Optional: ?otp_code=123456 for OTP verification
+**Response (200):**
 
-# Response
+```json
+{
+  "id": "cs_265bcc93810a42e8",
+  "status": "ready_for_complete",
+  "line_items": [
+    {
+      "id": "PROD-003",
+      "sku": "PROD-003",
+      "name": "Classic Potato Chips",
+      "quantity": 1,
+      "price": 3.79
+    }
+  ],
+  "totals": {
+    "subtotal": 3.79,
+    "discount": 0.0,
+    "tax": 0.0,
+    "total": 3.79,
+    "currency": "SGD"
+  },
+  "payment": null,
+  "ap2": {
+    "mandate_id": "PM-DE2869F446B4492C",
+    "user_authorization": "MEYCIQDfK1euCsog3pc76L2NGdTfx0Lx7c5uM2-8-jG7zEqaiAIhAP8xcZJ2zMzsvqIWaqXy5B8sbJ0MbGUGgg6S8U6dAQDV",
+    "merchant_authorization": "<JWT-VC signed by merchant DID:web key>"
+  }
+}
+```
+
+#### Step 3 — Complete the checkout (process payment via AP2)
+
+```bash
+POST http://localhost:8453/ucp/v1/checkout-sessions/cs_265bcc93810a42e8/complete
+# Optional: ?otp_code=123456 for OTP step-up verification
+```
+
+**Response (200):**
+
+```json
 {
   "status": "success",
-  "checkout": {...},
-  "receipt": {...}  // AP2 payment receipt
+  "checkout": {
+    "id": "cs_265bcc93810a42e8",
+    "status": "complete",
+    "line_items": [
+      {
+        "id": "PROD-003",
+        "sku": "PROD-003",
+        "name": "Classic Potato Chips",
+        "quantity": 1,
+        "price": 3.79
+      }
+    ],
+    "buyer_email": "paramesh.k@affinidi.com",
+    "totals": {
+      "subtotal": 3.79,
+      "discount": 0.0,
+      "tax": 0.0,
+      "total": 3.79,
+      "currency": "SGD"
+    },
+    "ap2": {
+      "mandate_id": "PM-DE2869F446B4492C",
+      "user_authorization": "MEYCIQDfK1euCsog3pc76L2NGdTfx0Lx7c5uM2-8-jG7zEqaiAIhAP8xcZJ2zMzsvqIWaqXy5B8sbJ0MbGUGgg6S8U6dAQDV",
+      "merchant_authorization": "<JWT-VC signed by merchant DID:web key>"
+    },
+    "completed_at": "2026-02-20T08:18:03.758590"
+  },
+  "receipt": {
+    "payment_mandate_id": "PM-DE2869F446B4492C",
+    "timestamp": "2026-02-20T08:18:03.758459",
+    "payment_id": "PAY-740A3F80D300",
+    "amount": {
+      "currency": "SGD",
+      "value": 3.79
+    },
+    "payment_status": {
+      "merchant_confirmation_id": "MCH-3B2B5FD4",
+      "psp_confirmation_id": "PSP-9C3528CC",
+      "network_confirmation_id": "NET-1465EC72"
+    },
+    "payment_method_details": {
+      "method": "CARD",
+      "payer_email": "paramesh.k@affinidi.com"
+    }
+  },
+  "message": "Payment completed successfully!"
 }
 ```
 
@@ -1076,6 +1298,101 @@ curl http://192.168.86.41:11434/api/tags
 
 # Update OLLAMA_URL in chat-backend/.env
 ```
+
+## 🔏 Merchant Authorization JWT-VC
+
+When the consumer agent attaches a payment mandate (PUT checkout session), the merchant backend signs it as a **Verifiable Credential (VC)** using its `DID:web` key via the **Trusted Service**. This signed JWT is returned as `merchant_authorization` and must be verified by the payment processor before releasing funds.
+
+### Who Signs It
+
+The **Merchant** using Trusted Service (Port 8454) signs the `CartMandate` VC on behalf of the merchant using:
+
+- **Algorithm**: `ES256K` (secp256k1 elliptic curve) via Affinidi TDK
+- **Key**: The merchant's `DID:web` key hosted at `/.well-known/did.json`
+- **kid**: `did:web:<merchant-domain>#<key-id>`
+
+### Sample JWT
+
+```
+eyJhbGciOiJFUzI1NksiLCJraWQiOiJkaWQ6d2ViOm1hcm1vdC1zdWl0ZWQtbXVza3JhdC5uZ3Jvay1mcmVlLmFwcCM0M2U4NzliNTQwYjc1NTAxNDdlZDUwZGMzZjU1MmQ3OS01ZThhOGRiZjYxYWE4NmUxIiwidHlwIjoiSldUIn0.eyJleHAiOjE3NzE1NzkwODEsIm5iZiI6MTc3MTU3NTQ4MSwiaXNzIjp7ImlkIjoiZGlkOndlYjptYXJtb3Qtc3VpdGVkLW11c2tyYXQubmdyb2stZnJlZS5hcHAifSwic3ViIjoiY2FydDpjc18yNjViY2M5MzgxMGE0MmU4IiwidmMiOnsiQGNvbnRleHQiOlsiaHR0cHM6Ly93d3cudzMub3JnLzIwMTgvY3JlZGVudGlhbHMvdjEiLCJodHRwczovL2FwMi1wcm90b2NvbC5vcmcvbWFuZGF0ZXMvdjEiXSwidHlwZSI6WyJWZXJpZmlhYmxlQ3JlZGVudGlhbCIsIkNhcnRNYW5kYXRlIl0sImNyZWRlbnRpYWxTdWJqZWN0Ijp7ImlkIjoiY2FydDpjc18yNjViY2M5MzgxMGE0MmU4IiwiY2FydEhhc2giOiJzaGEyNTY6ZDAxOWZmMDBhZDg5YTc5ODlhYzNlNzI5ZjkyNmEzMTFiYWQ1ODliMTEyOGU0MjA5YmQ5NjMzNzM4NjJmYTQ0OSIsIm1lcmNoYW50R3VhcmFudGVlIjoicHJpY2VfbG9ja2VkIiwidG90YWxBbW91bnQiOjMuNzksImN1cnJlbmN5IjoiU0dEIiwibWFuZGF0ZUlkIjoiUE0tREUyODY5RjQ0NkI0NDkyQyJ9fX0.mUouDC7r2ULgmaMfZaFFBqSN4BHNWCieGhGeW-eA4CIIJ0SpidLi4FNBv2FwYzQNP_g7dtcCTT3wnM2spXQ-Wg
+```
+
+### Decoded JWT Header
+
+```json
+{
+  "alg": "ES256K",
+  "kid": "did:web:marmot-suited-muskrat.ngrok-free.app#43e879b540b750147ed50dc3f552d79-5e8a8dbf61aa86e1",
+  "typ": "JWT"
+}
+```
+
+### Decoded JWT Payload
+
+```json
+{
+  "exp": 1771579081,
+  "nbf": 1771575481,
+  "iss": {
+    "id": "did:web:marmot-suited-muskrat.ngrok-free.app"
+  },
+  "sub": "cart:cs_265bcc93810a42e8",
+  "vc": {
+    "@context": [
+      "https://www.w3.org/2018/credentials/v1",
+      "https://ap2-protocol.org/mandates/v1"
+    ],
+    "type": ["VerifiableCredential", "CartMandate"],
+    "credentialSubject": {
+      "id": "cart:cs_265bcc93810a42e8",
+      "cartHash": "sha256:d019ff00ad89a7989ac3e729f926a311bad589b1128e4209bd963373862fa449",
+      "merchantGuarantee": "price_locked",
+      "totalAmount": 3.79,
+      "currency": "SGD",
+      "mandateId": "PM-DE2869F446B4492C"
+    }
+  }
+}
+```
+
+### Key Fields Explained
+
+| Field                                 | Value                                          | Meaning                                     |
+| ------------------------------------- | ---------------------------------------------- | ------------------------------------------- |
+| `iss.id`                              | `did:web:marmot-suited-muskrat.ngrok-free.app` | Merchant's DID — identifies who signed      |
+| `sub`                                 | `cart:cs_265bcc93810a42e8`                     | The checkout session this mandate covers    |
+| `vc.type`                             | `CartMandate`                                  | AP2 mandate type as a Verifiable Credential |
+| `credentialSubject.cartHash`          | `sha256:d019ff...`                             | Hash of cart contents — tamper evidence     |
+| `credentialSubject.merchantGuarantee` | `price_locked`                                 | Merchant guarantees the price won't change  |
+| `credentialSubject.totalAmount`       | `3.79`                                         | Amount the merchant commits to charge       |
+| `credentialSubject.mandateId`         | `PM-DE2869F446B4492C`                          | Links back to the AP2 payment mandate       |
+| `exp` / `nbf`                         | Unix timestamps                                | JWT validity window (1 hour)                |
+
+### How the Payment Processor Verifies It
+
+Before processing the payment, the merchant backend's AP2 agent performs the following checks:
+
+```
+1. Decode the JWT header → extract kid (DID:web key ID)
+2. Resolve DID document from did:web URL
+   └─ GET https://<merchant-domain>/.well-known/did.json
+3. Locate the public key matching the kid in the DID document
+4. Verify the JWT signature using the public key (ES256K)
+5. Check exp / nbf — reject if expired or not yet valid
+6. Verify credentialSubject.cartHash matches the actual cart contents
+7. Verify credentialSubject.totalAmount matches the payment mandate amount
+8. Verify credentialSubject.mandateId matches PM-DE2869F446B4492C
+9. Cross-check user_authorization (passkey signature) against the mandate contents
+10. If all checks pass → proceed to payment processing
+    If any check fails → reject with 400/403
+```
+
+This ensures:
+
+- **Authenticity**: Only the legitimate merchant (holder of the DID:web key) could have signed
+- **Integrity**: Cart contents and total amount cannot be tampered with after signing
+- **Non-repudiation**: The merchant cannot deny having issued the mandate
+- **Freshness**: Expired JWTs are rejected, preventing replay attacks
 
 ## 🎓 Learning Resources
 
