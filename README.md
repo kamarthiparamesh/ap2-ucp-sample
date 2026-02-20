@@ -6,24 +6,24 @@ This is a implementation demonstrating **two separate systems** communicating ov
 
 ## Table of Contents
 
-- [🏗️ Architecture Overview](#architecture-overview)
-- [🔌 UCP Endpoints](#ucp-endpoints)
-- [🔏 Merchant Authorization JWT-VC](#merchant-authorization-jwt-vc)
-- [💳 AP2 Payment Protocol Integration](#ap2-payment-protocol-integration)
-- [💳 Mastercard Integration Logic (Optional)](#mastercard-integration-logic-optional)
-- [🚀 Quick Start](#quick-start)
-- [📁 Project Structure](#project-structure)
-- [🔍 Testing UCP Communication](#testing-ucp-communication)
-- [🎯 Key Features](#key-features)
-- [🔧 Configuration](#configuration)
-- [📊 Port Allocation](#port-allocation)
-- [🔐 Production Deployment](#production-deployment)
-- [📝 Logs](#logs)
-- [🐛 Troubleshooting](#troubleshooting-1)
-- [🎓 Learning Resources](#learning-resources)
-- [📄 License](#license)
+- [Architecture Overview](#architecture-overview)
+- [UCP Endpoints](#ucp-endpoints)
+- [Merchant Authorization JWT-VC](#merchant-authorization-jwt-vc)
+- [AP2 Payment Protocol Integration](#ap2-payment-protocol-integration)
+- [Mastercard Integration Logic (Optional)](#mastercard-integration-logic-optional)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Testing UCP Communication](#testing-ucp-communication)
+- [Key Features](#key-features)
+- [Configuration](#configuration)
+- [Port Allocation](#port-allocation)
+- [Production Deployment](#production-deployment)
+- [Logs](#logs)
+- [Troubleshooting](#troubleshooting-1)
+- [Learning Resources](#learning-resources)
+- [License](#license)
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 The application is split into two independent backends that communicate via UCP:
 
@@ -127,7 +127,7 @@ The application is split into two independent backends that communicate via UCP:
 - **Chat Frontend** (Port 8450): Customer-facing shopping interface with registration, checkout, and passkey auth
 - **Merchant Portal** (Port 8451): Admin interface for product management
 
-## 🔌 UCP Endpoints
+## UCP Endpoints
 
 ### UCP Discovery Endpoint
 
@@ -466,7 +466,7 @@ POST http://localhost:8453/ucp/v1/checkout-sessions/cs_265bcc93810a42e8/complete
 - ✅ **Session Management**: Stateful checkout with status transitions
 - ✅ **OTP Support**: Handles step-up authentication via query parameter
 
-## 🔏 Merchant Authorization JWT-VC
+## Merchant Authorization JWT-VC
 
 When the consumer agent attaches a payment mandate (PUT checkout session), the merchant backend signs it as a **Verifiable Credential (VC)** using its `DID:web` key via the **Trusted Service**. This signed JWT is returned as `merchant_authorization` and must be verified by the payment processor before releasing funds.
 
@@ -561,7 +561,7 @@ This ensures:
 - **Non-repudiation**: The merchant cannot deny having issued the mandate
 - **Freshness**: Expired JWTs are rejected, preventing replay attacks
 
-## 💳 AP2 Payment Protocol Integration
+## AP2 Payment Protocol Integration
 
 This application implements the **Agentic Payment Protocol (AP2)** for secure, passkey-authenticated payments.
 
@@ -632,7 +632,7 @@ Payment Flow (via UCP Checkout):
    - OAuth 1.0a signed requests with RSA-SHA256
    - Fully optional - disabled by default
 
-## 💳 Mastercard Integration Logic (Optional)
+## Mastercard Integration Logic (Optional)
 
 ### Overview
 
@@ -838,7 +838,7 @@ For complete Mastercard integration documentation, see:
 - **[Mastercard Setup Guide](MASTERCARD_SETUP.md)** - Step-by-step credential setup
 - **[Mastercard Developer Portal](https://developer.mastercard.com/)** - Official API docs
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -1006,7 +1006,7 @@ If you see `ModuleNotFoundError: No module named 'httpx'` or similar errors, ens
 # Do run: ./start-split.sh (from repository root)
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ap2-ucp-sample/
@@ -1071,7 +1071,7 @@ ap2-ucp-sample/
 └── UCP-KNOWLEDGE-BASE.md     # UCP protocol documentation
 ```
 
-## 🔍 Testing UCP Communication
+## Testing UCP Communication
 
 ### 1. Test UCP Discovery
 
@@ -1107,7 +1107,7 @@ The chat backend will:
 4. Send product context to LLM
 5. Return AI-generated response with product recommendations
 
-## 🎯 Key Features
+## Key Features
 
 ### UCP Communication
 
@@ -1176,7 +1176,7 @@ The chat backend will:
 - 🛡️ **Zero trust architecture** - Credentials and products separated
 - 💳 **[OPTIONAL] Mastercard API** - Card tokenization and secure authentication ([docs](MASTERCARD_INTEGRATION.md))
 
-## 🔧 Configuration
+## Configuration
 
 ### Chat Backend (.env)
 
@@ -1199,7 +1199,7 @@ MERCHANT_ID=merchant-001
 MERCHANT_URL=http://localhost:8453
 ```
 
-## 📊 Port Allocation
+## Port Allocation
 
 | Service          | Port | Type     | Purpose                                |
 | ---------------- | ---- | -------- | -------------------------------------- |
@@ -1208,7 +1208,7 @@ MERCHANT_URL=http://localhost:8453
 | Chat Backend     | 8452 | FastAPI  | UCP Client + AI Agent                  |
 | Merchant Backend | 8453 | FastAPI  | UCP Server + Product DB                |
 
-## 🔐 Production Deployment
+## Production Deployment
 
 For production use:
 
@@ -1220,7 +1220,7 @@ For production use:
 6. **Monitor UCP endpoints** for performance
 7. **Implement rate limiting** on UCP endpoints
 
-## 📝 Logs
+## Logs
 
 View real-time logs (created by `start-split.sh`):
 
@@ -1240,7 +1240,7 @@ tail -f frontend/merchant-portal/merchant-portal.log
 
 Log locations are displayed when you run `./start-split.sh`.
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Port Conflicts
 
@@ -1272,14 +1272,14 @@ curl http://192.168.86.41:11434/api/tags
 # Update OLLAMA_URL in chat-backend/.env
 ```
 
-## 🎓 Learning Resources
+## Learning Resources
 
 - [UCP Specification](https://github.com/Universal-Commerce-Protocol)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Ollama Documentation](https://ollama.ai/docs)
 - [LangChain Documentation](https://python.langchain.com/)
 
-## 📄 License
+## License
 
 Apache License 2.0
 
